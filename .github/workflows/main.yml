@@ -1,0 +1,12 @@
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --stacktrace -x lint
+
+      - name: Expose Room Hash
+        run: |
+          echo "Scanning ephemeral build files for Identity Hash..."
+          # Search for the identityHash string in any generated file
+          grep -r "identityHash" . --include="*.java" --include="*.json" || echo "Hash not found."
+          
+          echo "Checking for Database File existence..."
+          find . -name "transit_prepopulated.db"
+          
