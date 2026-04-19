@@ -102,16 +102,37 @@ class AppViewModel @Inject constructor(
     private fun bootstrapGtfsIfNeeded() {
     viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
         try {
-            if (routeDao.observeAll().first().isEmpty()) {
-                timber.log.Timber.i("GTFS: Empty database, downloading static feed...")
-                val url = java.net.URL(com.handleit.transit.common.TransitConfig.GTFS_STATIC_ZIP_URL)
-                url.openStream().use { stream ->
-                    gtfsParser.parseZip(stream)
-                }
-                timber.log.Timber.i("GTFS: Bootstrap complete")
+            val existing = try {
+                routeDao.observeAll().first()
+            } catch (e: Exception) {
+                emptyList()
             }
+            if (existing.isNotEmpty()) {
+                timber.log.Timber.i("GTFS: Data already loaded, skipping bootstrap")
+                return@launch
+            }
+            timber.log.Timber.i("GTFS: Starting bootstrap download...")
+            val connection = java.net.URL(
+                com.handleit.transit.common.TransitConfig.GTFS_STATIC_ZIP_URL
+            ).openConnection() as java.net.HttpURLConnection
+            connection.connectTimeout = 15_000
+            connection.readTimeout = 60_000
+            connection.instanceFollowRedirects = true
+            connection.connect()
+            if (connection.responseCode != 200) {
+                timber.log.Timber.w("GTFS: Bootstrap skipped — HTTP ${connection.responseCode}")
+                return@launch
+            }
+            connection.inputStream.use { stream ->
+                gtfsParser.parseZip(stream)
+            }
+            timber.log.Timber.i("GTFS: Bootstrap complete")
+        } catch (e: java.net.UnknownHostException) {
+            timber.log.Timber.w("GTFS: No network — bootstrap skipped")
+        } catch (e: java.net.SocketTimeoutException) {
+            timber.log.Timber.w("GTFS: Timeout — bootstrap skipped")
         } catch (e: Exception) {
-            timber.log.Timber.e(e, "GTFS bootstrap failed: ${e.message}")
+            timber.log.Timber.e(e, "GTFS: Bootstrap failed silently: ${e.message}")
         }
     }
     }
