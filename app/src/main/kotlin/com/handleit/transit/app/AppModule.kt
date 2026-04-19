@@ -27,10 +27,11 @@ import javax.inject.Singleton
 object AppModule {
 
     @Provides @Singleton
-    fun provideDatabase(@ApplicationContext ctx: Context): TransitDatabase =
-        Room.databaseBuilder(ctx, TransitDatabase::class.java, "transit.db")
-            .fallbackToDestructiveMigration()
-            .build()
+fun provideDatabase(@ApplicationContext ctx: Context): TransitDatabase =
+    Room.databaseBuilder(ctx, TransitDatabase::class.java, "transit.db")
+        .createFromAsset("transit_prepopulated.db")
+        .fallbackToDestructiveMigration()
+        .build()
 
     @Provides fun provideStopDao(db: TransitDatabase): StopDao         = db.stopDao()
     @Provides fun provideRouteDao(db: TransitDatabase): RouteDao       = db.routeDao()
