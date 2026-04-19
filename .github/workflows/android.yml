@@ -25,8 +25,8 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      # Removed "Generate Gradle wrapper JAR" step — it often causes issues.
-      # Keep the committed gradle/wrapper files instead.
+      - name: Verify Gradle Wrapper
+        run: ./gradlew --version
 
       - name: Set local.properties (SDK + Maps key)
         run: |
@@ -39,7 +39,11 @@ jobs:
           cat local.properties | sed 's/MAPS_API_KEY=.*/MAPS_API_KEY=***REDACTED***/' || echo "local.properties not created"
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace --info
+        run: |
+          ./gradlew assembleDebug \
+            --stacktrace \
+            --info \
+            -Dorg.gradle.jvmargs="-Xmx2048m -Xms512m"
 
       - name: Upload Debug APK
         if: success()
@@ -66,8 +70,11 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Set local.properties (SDK only for tests)
+      - name: Set local.properties (SDK only)
         run: echo "sdk.dir=$ANDROID_SDK_ROOT" >> local.properties
 
       - name: Run FSM unit tests
-        run: ./gradlew :core:core-fsm:test --stacktrace
+        run: |
+          ./gradlew :core:core-fsm:test \
+            --stacktrace \
+            -Dorg.gradle.jvmargs="-Xmx2048m -Xms512m"
