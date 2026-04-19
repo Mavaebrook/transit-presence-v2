@@ -23,8 +23,9 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 
-    implementation(libs.room.runtime)
-    implementation(libs.room.ktx)
+    // Using 'api' to expose Room types to the :app module
+    api(libs.room.runtime)
+    api(libs.room.ktx)
     ksp(libs.room.compiler)
 
     implementation(libs.coroutines.android)
