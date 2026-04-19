@@ -40,6 +40,10 @@ jobs:
 
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace -x lint
+      - name: Expose Room Hash
+        run: |
+          find data/data-gtfs/build/generated -name "*AppDatabase_Impl.java" -exec grep -H "identityHash" {} +
+    
 
       - uses: actions/upload-artifact@v4
         with:
