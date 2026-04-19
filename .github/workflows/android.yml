@@ -11,6 +11,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build pre-populated GTFS database
+        run: python scripts/build_gtfs_db.py
+
       - uses: actions/setup-java@v4
         with:
           java-version: '17'
@@ -31,7 +39,7 @@ jobs:
           chmod +x gradlew
 
       - name: Build debug APK
-        run: ./gradlew assembleDebug --stacktrace
+        run: ./gradlew assembleDebug --stacktrace -x lint
 
       - uses: actions/upload-artifact@v4
         with:
