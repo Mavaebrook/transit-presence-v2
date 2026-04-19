@@ -1,0 +1,37 @@
+{
+  "name": "Transit Presence",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-22.04",
+  "features": {
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "17",
+      "jdkDistro": "temurin"
+    },
+    "ghcr.io/devcontainers/features/android-sdk:0": {
+      "version": "latest",
+      "buildToolsVersion": "34.0.0",
+      "platformVersion": "34"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "fwcd.kotlin",
+        "vscjava.vscode-gradle",
+        "mathiasfrohlich.Kotlin"
+      ],
+      "settings": {
+        "java.configuration.runtimes": [
+          {
+            "name": "JavaSE-17",
+            "default": true
+          }
+        ]
+      }
+    }
+  },
+  "postCreateCommand": "chmod +x gradlew && echo 'sdk.dir=/usr/local/lib/android/sdk' >> local.properties",
+  "remoteEnv": {
+    "JAVA_HOME": "/usr/local/sdkman/candidates/java/current",
+    "ANDROID_SDK_ROOT": "/usr/local/lib/android/sdk"
+  }
+}

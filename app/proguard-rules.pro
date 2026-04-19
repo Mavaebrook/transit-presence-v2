@@ -1,0 +1,6 @@
+-keep class com.handleit.transit.** { *; }
+-keep class dagger.hilt.** { *; }
+-keep class * extends androidx.room.RoomDatabase
+-keepattributes Signature, Exceptions
+-keep class retrofit2.** { *; }
+-assumenosideeffects class timber.log.Timber { *; }

@@ -1,0 +1,21 @@
+# Gradle
+.gradle/
+build/
+**/build/
+
+# Android local config — DO NOT COMMIT (contains sdk.dir and API keys)
+local.properties
+
+# Android Studio / IntelliJ
+*.iml
+.idea/
+*.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Keys — never commit real values
+# The structure of TransitConfig.kt IS committed (with placeholder values)
+# so anyone cloning the repo knows exactly what to fill in.
+# Only add TransitConfig.kt here if you put real keys directly in it.
+# secrets.properties

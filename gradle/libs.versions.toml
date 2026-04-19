@@ -1,0 +1,121 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Transit Presence — Version Catalog
+# All versions verified against Maven Central / Google Maven as of April 2026.
+# Before updating a version, check compatibility at:
+#   https://developer.android.com/jetpack/androidx/releases
+# ─────────────────────────────────────────────────────────────────────────────
+
+[versions]
+# Build tooling
+agp                     = "8.2.2"        # Android Gradle Plugin — verified stable
+kotlin                  = "1.9.22"       # Kotlin — compatible with Compose 1.6.x
+ksp                     = "1.9.22-1.0.17" # KSP — must match Kotlin version exactly
+java                    = "17"           # Java target — matches Codespaces default
+
+# AndroidX Core
+coreKtx                 = "1.12.0"
+lifecycleRuntime        = "2.7.0"
+activityCompose         = "1.8.2"
+appcompat               = "1.6.1"
+
+# Compose — BOM manages all compose library versions together
+composeBom              = "2024.02.00"   # Verified stable BOM
+navigationCompose       = "2.7.7"
+
+# Hilt
+hilt                    = "2.50"         # Verified — works with KSP 1.9.22
+hiltNavigationCompose   = "1.1.0"
+
+# Room
+room                    = "2.6.1"
+
+# Network
+okhttp                  = "4.12.0"
+
+# Maps
+mapsCompose             = "4.3.0"        # maps-compose — verified stable
+playServicesMaps        = "18.2.0"
+playServicesLocation    = "21.1.0"
+
+# Coroutines
+coroutines              = "1.7.3"        # Stable — 1.8.x requires Kotlin 1.9.21+
+
+# DataStore
+datastore               = "1.0.0"
+
+# Serialization
+serialization           = "1.6.3"
+
+# Logging
+timber                  = "5.0.1"
+
+# Testing
+junit                   = "4.13.2"
+mockk                   = "1.13.9"
+turbine                 = "1.0.0"
+coroutinesTest          = "1.7.3"
+
+[libraries]
+# ── AndroidX Core ─────────────────────────────────────────────────────────────
+androidx-core-ktx           = { group = "androidx.core",     name = "core-ktx",              version.ref = "coreKtx" }
+androidx-appcompat          = { group = "androidx.appcompat", name = "appcompat",             version.ref = "appcompat" }
+androidx-lifecycle-runtime  = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntime" }
+androidx-lifecycle-viewmodel= { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycleRuntime" }
+androidx-activity-compose   = { group = "androidx.activity",  name = "activity-compose",      version.ref = "activityCompose" }
+
+# ── Compose BOM + Libraries ───────────────────────────────────────────────────
+compose-bom             = { group = "androidx.compose",     name = "compose-bom",            version.ref = "composeBom" }
+compose-ui              = { group = "androidx.compose.ui",  name = "ui" }
+compose-ui-graphics     = { group = "androidx.compose.ui",  name = "ui-graphics" }
+compose-ui-tooling      = { group = "androidx.compose.ui",  name = "ui-tooling" }
+compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+compose-material3       = { group = "androidx.compose.material3", name = "material3" }
+compose-material-icons  = { group = "androidx.compose.material", name = "material-icons-extended" }
+compose-navigation      = { group = "androidx.navigation",  name = "navigation-compose",      version.ref = "navigationCompose" }
+
+# ── Hilt ──────────────────────────────────────────────────────────────────────
+hilt-android            = { group = "com.google.dagger",    name = "hilt-android",            version.ref = "hilt" }
+hilt-compiler           = { group = "com.google.dagger",    name = "hilt-android-compiler",   version.ref = "hilt" }
+hilt-navigation-compose = { group = "androidx.hilt",        name = "hilt-navigation-compose", version.ref = "hiltNavigationCompose" }
+
+# ── Room ──────────────────────────────────────────────────────────────────────
+room-runtime            = { group = "androidx.room",        name = "room-runtime",            version.ref = "room" }
+room-compiler           = { group = "androidx.room",        name = "room-compiler",           version.ref = "room" }
+room-ktx                = { group = "androidx.room",        name = "room-ktx",                version.ref = "room" }
+
+# ── Network ───────────────────────────────────────────────────────────────────
+# NOTE: We do NOT use gtfs-realtime-bindings — it's abandoned and causes
+# protobuf version conflicts. We parse GTFS-RT protobuf bytes manually.
+okhttp                  = { group = "com.squareup.okhttp3", name = "okhttp",                  version.ref = "okhttp" }
+okhttp-logging          = { group = "com.squareup.okhttp3", name = "logging-interceptor",     version.ref = "okhttp" }
+
+# ── Maps ──────────────────────────────────────────────────────────────────────
+maps-compose            = { group = "com.google.maps.android", name = "maps-compose",         version.ref = "mapsCompose" }
+play-services-maps      = { group = "com.google.android.gms",  name = "play-services-maps",   version.ref = "playServicesMaps" }
+play-services-location  = { group = "com.google.android.gms",  name = "play-services-location", version.ref = "playServicesLocation" }
+
+# ── Coroutines ────────────────────────────────────────────────────────────────
+coroutines-android      = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android",       version.ref = "coroutines" }
+coroutines-play-services= { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "coroutines" }
+
+# ── Storage & Serialization ───────────────────────────────────────────────────
+datastore-preferences   = { group = "androidx.datastore",   name = "datastore-preferences",   version.ref = "datastore" }
+serialization-json      = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+timber                  = { group = "com.jakewharton.timber", name = "timber",                version.ref = "timber" }
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+junit                   = { group = "junit",                name = "junit",                   version.ref = "junit" }
+mockk                   = { group = "io.mockk",             name = "mockk",                   version.ref = "mockk" }
+turbine                 = { group = "app.cash.turbine",     name = "turbine",                 version.ref = "turbine" }
+coroutines-test         = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutinesTest" }
+
+[plugins]
+android-application     = { id = "com.android.application",                    version.ref = "agp" }
+android-library         = { id = "com.android.library",                        version.ref = "agp" }
+kotlin-android          = { id = "org.jetbrains.kotlin.android",               version.ref = "kotlin" }
+kotlin-jvm              = { id = "org.jetbrains.kotlin.jvm",                   version.ref = "kotlin" }
+kotlin-serialization    = { id = "org.jetbrains.kotlin.plugin.serialization",  version.ref = "kotlin" }
+hilt                    = { id = "com.google.dagger.hilt.android",             version.ref = "hilt" }
+ksp                     = { id = "com.google.devtools.ksp",                    version.ref = "ksp" }
