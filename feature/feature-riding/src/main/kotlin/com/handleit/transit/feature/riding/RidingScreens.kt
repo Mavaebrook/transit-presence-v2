@@ -551,4 +551,10 @@ private fun ConfidenceBadge(confidence: Float) {
     ) {
         Text(
             "${(confidence * 100).toInt()}% CONF",
-            modifier = Modifier.padding(horizontal = 
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = color,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
