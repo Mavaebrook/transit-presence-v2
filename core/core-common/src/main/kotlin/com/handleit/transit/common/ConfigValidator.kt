@@ -1,6 +1,5 @@
 package com.handleit.transit.common
 
-import timber.log.Timber
 
 /**
  * Validates TransitConfig at app startup.
@@ -43,10 +42,7 @@ object ConfigValidator {
         )
 
         if (errors.isEmpty()) {
-            Timber.i("ConfigValidator ✓ All required config values are set")
-            Timber.i("  Map provider : ${TransitConfig.MAP_PROVIDER_DEFAULT}")
-            Timber.i("  Vehicle feed : ${TransitConfig.GTFS_RT_VEHICLE_POSITIONS_URL}")
-            Timber.i("  Trip feed    : ${TransitConfig.GTFS_RT_TRIP_UPDATES_URL}")
+            println("ConfigValidator ✓ All config values set")
             return
         }
 
@@ -60,7 +56,7 @@ object ConfigValidator {
         }
 
         if (isDebug) throw IllegalStateException(message)
-        else Timber.w(message)
+        else println(message)
     }
 
     private fun check(value: String, name: String, hint: String, errors: MutableList<String>) {
