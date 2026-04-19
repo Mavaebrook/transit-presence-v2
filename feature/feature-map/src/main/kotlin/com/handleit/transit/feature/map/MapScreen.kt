@@ -317,7 +317,7 @@ private fun OsmMapLayer(
                 val marker = Marker(mapView).apply {
                     position = GeoPoint(vehicle.lat, vehicle.lng)
                     title = "Bus ${vehicle.vehicleId ?: ""}"
-                    subDescription = "Route ${vehicle.routeId ?: ""}"
+                    subDescription = "Route ${vehicle.routeId.orEmpty()}"
                     rotation = -(vehicle.bearing ?: 0f)
                 }
                 mapView.overlays.add(marker)
