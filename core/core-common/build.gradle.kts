@@ -1,11 +1,11 @@
 plugins {
-alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlin.jvm)
 }
 
 kotlin {
-jvmToolchain(17)
+    jvmToolchain(17)
 }
 
 dependencies {
-implementation(libs.timber)
+    testImplementation(libs.junit)
 }
