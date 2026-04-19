@@ -33,8 +33,7 @@ object TransitConfig {
      *
      * If using OpenStreetMap, leave this as the placeholder — it is ignored.
      */
-    val MAPS_API_KEY: String = System.getProperty("MAPS_API_KEY")
-    ?: error("MAPS_API_KEY is required. Set it in local.properties or as GitHub secret MAPS_API_KEY")
+    const val MAPS_API_KEY = "AIzaSyC9HCFtqOrR9ZCwIisVm-FJ5OIeU88Ort0"
     // ─────────────────────────────────────────────────────────────────────────
     // SECTION 2: MAP PROVIDER
     // ─────────────────────────────────────────────────────────────────────────
