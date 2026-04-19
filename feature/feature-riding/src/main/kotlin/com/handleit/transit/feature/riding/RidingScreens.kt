@@ -6,8 +6,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DirectionsBus
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,10 +20,6 @@ import com.handleit.transit.fsm.AlertLevel
 import com.handleit.transit.fsm.RideState
 import com.handleit.transit.model.*
 
-/**
- * RidingScreen — routes to the correct riding-phase screen based on FSM state.
- * Called from the app shell when state is not Idle.
- */
 @Composable
 fun RidingScreen(
     state: RideState,
@@ -52,25 +46,27 @@ fun RidingScreen(
     }
 }
 
-// ─── Waiting At Stop ──────────────────────────────────────────────────────────
-
 @Composable
 fun WaitingScreen(state: RideState.WaitingAtStop, onCancel: () -> Unit) {
     TransitScaffold {
         StateChip("WAITING AT STOP", MaterialTheme.colorScheme.secondary)
         Spacer(Modifier.height(8.dp))
-        Text(state.stop.stopName,
+        Text(
+            state.stop.stopName,
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.onBackground,
-            textAlign = TextAlign.Center)
+            textAlign = TextAlign.Center,
+        )
         RouteTag(state.route)
         Spacer(Modifier.height(28.dp))
-
         if (state.arrivals.isEmpty()) {
             LoadingRow("Loading arrivals...")
         } else {
-            Text("NEXT BUS", style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
+            Text(
+                "NEXT BUS",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+            )
             Spacer(Modifier.height(8.dp))
             state.arrivals.take(3).forEach { ArrivalRow(it) }
         }
@@ -81,14 +77,11 @@ fun WaitingScreen(state: RideState.WaitingAtStop, onCancel: () -> Unit) {
     }
 }
 
-// ─── Bus Approaching ──────────────────────────────────────────────────────────
-
 @Composable
 fun ApproachingScreen(state: RideState.BusApproaching, onCancel: () -> Unit) {
     TransitScaffold {
         StateChip("BUS APPROACHING", MaterialTheme.colorScheme.primary)
         Spacer(Modifier.height(24.dp))
-
         val progress = (1f - state.secsToArrival / 300f).coerceIn(0f, 1f)
         Box(contentAlignment = Alignment.Center) {
             CircularProgressIndicator(
@@ -99,29 +92,36 @@ fun ApproachingScreen(state: RideState.BusApproaching, onCancel: () -> Unit) {
                 strokeWidth = 6.dp,
             )
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                CountdownText(state.secsToArrival,
+                CountdownText(
+                    state.secsToArrival,
                     style = MaterialTheme.typography.displaySmall,
-                    color = MaterialTheme.colorScheme.primary)
-                Text("AWAY", style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    "AWAY",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                )
             }
         }
         Spacer(Modifier.height(20.dp))
-        InfoCard("ROUTE ${state.route.routeShortName}",
+        InfoCard(
+            "ROUTE ${state.route.routeShortName}",
             state.arrival.headsign.ifEmpty { state.route.routeLongName },
-            MaterialTheme.colorScheme.primary)
+            MaterialTheme.colorScheme.primary,
+        )
         Spacer(Modifier.weight(1f))
-        Text("🚶 Position yourself at the stop",
+        Text(
+            "🚶 Position yourself at the stop",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+        )
         Spacer(Modifier.height(8.dp))
         TextButton(onClick = onCancel) {
             Text("Cancel", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
         }
     }
 }
-
-// ─── Boarding Window ──────────────────────────────────────────────────────────
 
 @Composable
 fun BoardingScreen(
@@ -135,13 +135,6 @@ fun BoardingScreen(
         AlertLevel.STRONG   -> Color(0xFFFF5722)
         AlertLevel.CRITICAL -> Color(0xFFFF3366)
     }
-
-    val flash by rememberInfiniteTransition(label = "flash").animateFloat(
-        initialValue = if (state.level >= AlertLevel.STRONG) 0.5f else 1f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(400, easing = LinearEasing), RepeatMode.Reverse),
-        label = "flashAlpha",
-    )
 
     Box(
         modifier = Modifier
@@ -161,17 +154,23 @@ fun BoardingScreen(
                 fontWeight = FontWeight.ExtraBold,
             )
             Spacer(Modifier.height(20.dp))
-            CountdownText(state.secsToArrival,
+            CountdownText(
+                state.secsToArrival,
                 style = MaterialTheme.typography.displayLarge,
-                color = alertColor)
+                color = alertColor,
+            )
             Spacer(Modifier.height(12.dp))
-            Text("ROUTE ${state.route.routeShortName}",
+            Text(
+                "ROUTE ${state.route.routeShortName}",
                 style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onBackground)
-            Text(state.stop.stopName,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            Text(
+                state.stop.stopName,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                textAlign = TextAlign.Center)
+                textAlign = TextAlign.Center,
+            )
             Spacer(Modifier.height(36.dp))
             Button(
                 onClick = onConfirmBoarding,
@@ -179,21 +178,24 @@ fun BoardingScreen(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(10.dp),
             ) {
-                Text("I'M ON THE BUS",
+                Text(
+                    "I'M ON THE BUS",
                     modifier = Modifier.padding(vertical = 8.dp),
                     style = MaterialTheme.typography.titleMedium,
                     color = Color.White,
-                    fontWeight = FontWeight.Bold)
+                    fontWeight = FontWeight.Bold,
+                )
             }
             Spacer(Modifier.height(12.dp))
             TextButton(onClick = onCancel) {
-                Text("Missed it", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
+                Text(
+                    "Missed it",
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+                )
             }
         }
     }
 }
-
-// ─── On Bus ───────────────────────────────────────────────────────────────────
 
 @Composable
 fun OnBusScreen(
@@ -206,22 +208,32 @@ fun OnBusScreen(
     val progress = if (stopsTotal > 0) 1f - trip.stopsRemaining.size.toFloat() / stopsTotal else 0f
 
     TransitScaffold {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             StateChip("ON BUS", MaterialTheme.colorScheme.secondary)
             ConfidenceBadge(state.fusionResult.onBusConfidence)
         }
         Spacer(Modifier.height(12.dp))
-        Text("Route ${trip.route.routeShortName}",
+        Text(
+            "Route ${trip.route.routeShortName}",
             style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Bold)
-        Text(trip.route.routeLongName,
+            color = MaterialTheme.colorScheme.onBackground,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            trip.route.routeLongName,
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
-
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+        )
         Spacer(Modifier.height(20.dp))
-        Text("ROUTE PROGRESS", style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
+        Text(
+            "ROUTE PROGRESS",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+        )
         Spacer(Modifier.height(6.dp))
         LinearProgressIndicator(
             progress = { progress },
@@ -230,30 +242,34 @@ fun OnBusScreen(
             trackColor = MaterialTheme.colorScheme.outline,
         )
         Spacer(Modifier.height(20.dp))
-
         trip.nextStop?.let { next ->
             InfoCard("NEXT STOP", next.stopName, MaterialTheme.colorScheme.primary)
             Spacer(Modifier.height(10.dp))
         }
         trip.destinationStop?.let { dest ->
-            InfoCard("YOUR DESTINATION",
+            InfoCard(
+                "YOUR DESTINATION",
                 "${dest.stopName}\n${trip.stopsRemaining.size} stops away",
-                MaterialTheme.colorScheme.secondary)
+                MaterialTheme.colorScheme.secondary,
+            )
         }
-
         Spacer(Modifier.weight(1f))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             TextButton(onClick = onConfirmExit) {
-                Text("Exit now", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
+                Text(
+                    "Exit now",
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                )
             }
             TextButton(onClick = onReset) {
-                Text("End trip", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
+                Text(
+                    "End trip",
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                )
             }
         }
     }
 }
-
-// ─── Approaching Exit ─────────────────────────────────────────────────────────
 
 @Composable
 fun ApproachingExitScreen(state: RideState.ApproachingExit, onConfirmExit: () -> Unit) {
@@ -263,29 +279,37 @@ fun ApproachingExitScreen(state: RideState.ApproachingExit, onConfirmExit: () ->
         Text("🔔", fontSize = 64.sp, textAlign = TextAlign.Center)
         Spacer(Modifier.height(16.dp))
         Text(
-            if (state.stopsRemaining == 1) "1 STOP AWAY" else "${state.stopsRemaining} STOPS AWAY",
+            if (state.stopsRemaining == 1) "1 STOP AWAY"
+            else "${state.stopsRemaining} STOPS AWAY",
             style = MaterialTheme.typography.headlineMedium,
-            color = Color(0xFFFF9800), fontWeight = FontWeight.Bold)
+            color = Color(0xFFFF9800),
+            fontWeight = FontWeight.Bold,
+        )
         Spacer(Modifier.height(20.dp))
         InfoCard("YOUR DESTINATION", state.destinationStop.stopName, Color(0xFFFF9800))
         Spacer(Modifier.weight(1f))
         Button(
             onClick = onConfirmExit,
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
-            modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp),
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(10.dp),
         ) {
-            Text("I'VE EXITED", modifier = Modifier.padding(vertical = 8.dp),
-                color = Color.White, fontWeight = FontWeight.Bold)
+            Text(
+                "I'VE EXITED",
+                modifier = Modifier.padding(vertical = 8.dp),
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+            )
         }
     }
 }
 
-// ─── Exit Window ──────────────────────────────────────────────────────────────
-
 @Composable
 fun ExitWindowScreen(state: RideState.ExitWindow, onConfirmExit: () -> Unit) {
     Box(
-        modifier = Modifier.fillMaxSize().background(Color(0xFFFF3366).copy(alpha = 0.12f)),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFFF3366).copy(alpha = 0.12f)),
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -294,14 +318,20 @@ fun ExitWindowScreen(state: RideState.ExitWindow, onConfirmExit: () -> Unit) {
         ) {
             Text("🛑", fontSize = 80.sp)
             Spacer(Modifier.height(16.dp))
-            Text("PULL CORD NOW",
+            Text(
+                "PULL CORD NOW",
                 style = MaterialTheme.typography.displaySmall,
-                color = Color(0xFFFF3366), fontWeight = FontWeight.ExtraBold,
-                textAlign = TextAlign.Center)
+                color = Color(0xFFFF3366),
+                fontWeight = FontWeight.ExtraBold,
+                textAlign = TextAlign.Center,
+            )
             Spacer(Modifier.height(12.dp))
-            Text(state.destinationStop.stopName,
+            Text(
+                state.destinationStop.stopName,
                 style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onBackground, textAlign = TextAlign.Center)
+                color = MaterialTheme.colorScheme.onBackground,
+                textAlign = TextAlign.Center,
+            )
             state.secsToArrival?.let { secs ->
                 Spacer(Modifier.height(8.dp))
                 CountdownText(secs, MaterialTheme.typography.headlineMedium, Color(0xFFFF3366))
@@ -310,45 +340,72 @@ fun ExitWindowScreen(state: RideState.ExitWindow, onConfirmExit: () -> Unit) {
             Button(
                 onClick = onConfirmExit,
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF3366)),
-                modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
             ) {
-                Text("EXITED", modifier = Modifier.padding(vertical = 8.dp),
-                    color = Color.White, fontWeight = FontWeight.Bold)
+                Text(
+                    "EXITED",
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                )
             }
         }
     }
 }
 
-// ─── Trip Complete ────────────────────────────────────────────────────────────
-
 @Composable
 fun TripCompleteScreen(state: RideState.TripComplete, onDismiss: () -> Unit) {
     TransitScaffold {
         Spacer(Modifier.weight(1f))
-        Text("✓", fontSize = 80.sp, color = MaterialTheme.colorScheme.secondary,
-            textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+        Text(
+            "✓",
+            fontSize = 80.sp,
+            color = MaterialTheme.colorScheme.secondary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
         Spacer(Modifier.height(12.dp))
-        Text("TRIP COMPLETE", style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+        Text(
+            "TRIP COMPLETE",
+            style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.secondary,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
         state.exitedStop?.let {
-            Text(it.stopName, style = MaterialTheme.typography.bodyMedium,
+            Text(
+                it.stopName,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
-                textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
         val mins = state.durationMs / 60_000
-        Text("${mins}m ride on Route ${state.routeName}",
+        Text(
+            "${mins}m ride on Route ${state.routeName}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
-            textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
         Spacer(Modifier.weight(1f))
         Button(
             onClick = onDismiss,
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-            modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.secondary,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(10.dp),
         ) {
-            Text("DONE", modifier = Modifier.padding(vertical = 8.dp),
-                color = Color.Black, fontWeight = FontWeight.Bold)
+            Text(
+                "DONE",
+                modifier = Modifier.padding(vertical = 8.dp),
+                color = Color.Black,
+                fontWeight = FontWeight.Bold,
+            )
         }
     }
 }
@@ -371,8 +428,13 @@ private fun StateChip(label: String, color: Color) {
         shape = RoundedCornerShape(6.dp),
         border = BorderStroke(1.dp, color.copy(alpha = 0.4f)),
     ) {
-        Text(label, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-            style = MaterialTheme.typography.labelSmall, color = color, fontWeight = FontWeight.Bold)
+        Text(
+            label,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = color,
+            fontWeight = FontWeight.Bold,
+        )
     }
 }
 
@@ -383,10 +445,12 @@ private fun RouteTag(route: Route) {
         shape = RoundedCornerShape(4.dp),
         modifier = Modifier.padding(top = 6.dp),
     ) {
-        Text("ROUTE ${route.routeShortName}",
+        Text(
+            "ROUTE ${route.routeShortName}",
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary)
+            color = MaterialTheme.colorScheme.primary,
+        )
     }
 }
 
@@ -401,8 +465,11 @@ private fun InfoCard(title: String, body: String, color: Color) {
         Column(Modifier.padding(14.dp)) {
             Text(title, style = MaterialTheme.typography.labelSmall, color = color)
             Spacer(Modifier.height(4.dp))
-            Text(body, style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onBackground)
+            Text(
+                body,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
         }
     }
 }
@@ -423,31 +490,51 @@ private fun ArrivalRow(arrival: BusArrival) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column {
-                Text(arrival.routeShortName, style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                Text(arrival.headsign.ifEmpty { "Route ${arrival.routeId}" },
+                Text(
+                    arrival.routeShortName,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    arrival.headsign.ifEmpty { "Route ${arrival.routeId}" },
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                )
             }
             Column(horizontalAlignment = Alignment.End) {
-                Text(eta, style = MaterialTheme.typography.titleMedium,
+                Text(
+                    eta,
+                    style = MaterialTheme.typography.titleMedium,
                     color = if (mins < 2) Color(0xFFFF9800)
                             else MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Bold)
-                Text(if (arrival.isRealtime) "LIVE" else "SCHED",
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    if (arrival.isRealtime) "LIVE" else "SCHED",
                     style = MaterialTheme.typography.labelSmall,
                     color = if (arrival.isRealtime) MaterialTheme.colorScheme.secondary
-                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                )
             }
         }
     }
 }
 
 @Composable
-private fun CountdownText(secs: Long, style: androidx.compose.ui.text.TextStyle, color: Color) {
-    val m = secs / 60; val s = secs % 60
-    Text(if (m > 0) "${m}m ${"%02d".format(s)}s" else "${s}s",
-        style = style, color = color, fontWeight = FontWeight.Bold)
+private fun CountdownText(
+    secs: Long,
+    style: androidx.compose.ui.text.TextStyle,
+    color: Color,
+) {
+    val m = secs / 60
+    val s = secs % 60
+    Text(
+        if (m > 0) "${m}m ${"%02d".format(s)}s" else "${s}s",
+        style = style,
+        color = color,
+        fontWeight = FontWeight.Bold,
+    )
 }
 
 @Composable
@@ -462,18 +549,6 @@ private fun ConfidenceBadge(confidence: Float) {
         shape = RoundedCornerShape(4.dp),
         border = BorderStroke(1.dp, color.copy(alpha = 0.4f)),
     ) {
-        Text("${(confidence * 100).toInt()}% CONF",
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-            style = MaterialTheme.typography.labelSmall, color = color)
-    }
-}
-
-@Composable
-private fun LoadingRow(message: String) {
-    Row(verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-        Text(message, style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
-    }
-}
+        Text(
+            "${(confidence * 100).toInt()}% CONF",
+            modifier = Modifier.padding(horizontal = 
