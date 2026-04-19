@@ -65,6 +65,7 @@ dependencies {
     implementation(project(":feature:feature-riding"))
     implementation(project(":feature:feature-settings"))
     implementation(project(":service:service-tracking"))
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     // Hilt
     implementation(libs.hilt.android)
