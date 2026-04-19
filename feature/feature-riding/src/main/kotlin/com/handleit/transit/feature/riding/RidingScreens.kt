@@ -473,7 +473,25 @@ private fun InfoCard(title: String, body: String, color: Color) {
         }
     }
 }
-
+@Composable
+private fun LoadingRow(message: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(16.dp),
+            strokeWidth = 2.dp
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+        )
+    }
+}
 @Composable
 private fun ArrivalRow(arrival: BusArrival) {
     val mins = arrival.secsToArrival / 60
