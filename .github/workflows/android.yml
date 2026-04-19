@@ -22,17 +22,22 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Export Java environment explicitly
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME" >> $GITHUB_ENV
+          echo "$JAVA_HOME/bin" >> $GITHUB_PATH
+
       - name: Debug Java Environment
         run: |
           echo "=== Java Debug ==="
           echo "JAVA_HOME = $JAVA_HOME"
-          echo "PATH contains java:"
-          which java || echo "java NOT found in PATH"
+          echo "PATH = $PATH"
+          which java || echo "java NOT found"
           java -version || echo "java command failed"
-          echo "=== End Java Debug ==="
-
-      - name: Make gradlew executable
-        run: chmod +x gradlew
+          echo "=== End Debug ==="
 
       - name: Set local.properties
         run: |
@@ -40,8 +45,6 @@ jobs:
           echo "MAPS_API_KEY=${{ secrets.MAPS_API_KEY }}" >> local.properties
 
       - name: Build Debug APK
-        env:
-          JAVA_HOME: ${{ env.JAVA_HOME }}
         run: |
           ./gradlew assembleDebug \
             --stacktrace \
