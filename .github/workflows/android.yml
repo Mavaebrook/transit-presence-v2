@@ -30,18 +30,21 @@ jobs:
           echo "sdk.dir=$ANDROID_SDK_ROOT" >> local.properties
           echo "MAPS_API_KEY=${{ secrets.MAPS_API_KEY }}" >> local.properties
 
-      - name: Debug local.properties
+      - name: Debug environment
         run: |
+          echo "=== Java Debug ==="
+          which java || echo "java not in PATH"
+          echo $JAVA_HOME
+          java -version
           echo "=== local.properties (key redacted) ==="
-          cat local.properties | sed 's/MAPS_API_KEY=.*/MAPS_API_KEY=***REDACTED***/' || echo "No local.properties"
+          cat local.properties | sed 's/MAPS_API_KEY=.*/MAPS_API_KEY=***REDACTED***/'
 
       - name: Build Debug APK
         run: |
           ./gradlew assembleDebug \
             --stacktrace \
             --info \
-            -Dorg.gradle.jvmargs="-Xmx2048m -Xms512m" \
-            --no-daemon
+            -Dorg.gradle.jvmargs="-Xmx2048m -Xms512m"
 
       - name: Upload Debug APK
         if: success()
