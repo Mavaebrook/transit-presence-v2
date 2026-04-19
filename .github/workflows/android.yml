@@ -22,6 +22,15 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
+      - name: Debug Java Environment
+        run: |
+          echo "=== Java Debug ==="
+          echo "JAVA_HOME = $JAVA_HOME"
+          echo "PATH contains java:"
+          which java || echo "java NOT found in PATH"
+          java -version || echo "java command failed"
+          echo "=== End Java Debug ==="
+
       - name: Make gradlew executable
         run: chmod +x gradlew
 
@@ -30,16 +39,9 @@ jobs:
           echo "sdk.dir=$ANDROID_SDK_ROOT" >> local.properties
           echo "MAPS_API_KEY=${{ secrets.MAPS_API_KEY }}" >> local.properties
 
-      - name: Debug environment
-        run: |
-          echo "=== Java Debug ==="
-          which java || echo "java not in PATH"
-          echo $JAVA_HOME
-          java -version
-          echo "=== local.properties (key redacted) ==="
-          cat local.properties | sed 's/MAPS_API_KEY=.*/MAPS_API_KEY=***REDACTED***/'
-
       - name: Build Debug APK
+        env:
+          JAVA_HOME: ${{ env.JAVA_HOME }}
         run: |
           ./gradlew assembleDebug \
             --stacktrace \
