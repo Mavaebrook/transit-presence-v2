@@ -17,7 +17,10 @@ jobs:
           python-version: '3.11'
 
       - name: Build pre-populated GTFS database
-        run: python scripts/build_gtfs_db.py
+        run: |
+          python scripts/build_gtfs_db.py
+          # Verify the file was created in the assets directory
+          ls -lh app/src/main/assets/transit_prepopulated.db || echo "Database file missing!"
 
       - uses: actions/setup-java@v4
         with:
@@ -40,13 +43,23 @@ jobs:
 
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace -x lint
-      - name: Expose Room Hash
+
+      - name: Extract Room Hash
         run: |
-          find data/data-gtfs/build/generated -name "*AppDatabase_Impl.java" -exec grep -H "identityHash" {} +
-    
+          echo "--------------------------------------------------"
+          echo "SEARCHING FOR ROOM IDENTITY HASH..."
+          # Locates the hash in the generated implementation file
+          HASH=$(grep -r "identityHash =" . | grep "_Impl.java" | head -1 | awk -F'"' '{print $2}')
+          if [ -z "$HASH" ]; then
+            echo "HASH NOT FOUND. Ensure the Room compiler (KSP/KAPT) ran successfully."
+          else
+            echo "YOUR_ROOM_IDENTITY_HASH: $HASH"
+          fi
+          echo "--------------------------------------------------"
 
       - uses: actions/upload-artifact@v4
         with:
           name: transit-presence-v2-debug
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 30
+          
