@@ -7,7 +7,7 @@ import com.handleit.transit.common.TransitConfig
 import com.handleit.transit.data.gtfs.RouteDao
 import com.handleit.transit.data.gtfsrt.GtfsRtClient
 import com.handleit.transit.data.location.LocationModule
-import com.handleit.transit.data.location.LocationSnapshot
+import com.handleit.transit.model.LocationSnapshot
 import com.handleit.transit.data.location.SensorFusionEngine
 import com.handleit.transit.fsm.*
 import com.handleit.transit.model.*
