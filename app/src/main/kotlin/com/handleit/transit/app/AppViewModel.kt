@@ -44,6 +44,7 @@ class AppViewModel @Inject constructor(
     private val fusionEngine: SensorFusionEngine,
     private val gtfsRtClient: GtfsRtClient,
     private val routeDao: RouteDao,
+    private val gtfsParser: com.handleit.transit.data.gtfs.GtfsStaticParser,
 ) : ViewModel() {
 
     private val transitionLogs = mutableListOf<TransitionLog>()
@@ -58,12 +59,13 @@ class AppViewModel @Inject constructor(
     val state: StateFlow<AppState> = _state.asStateFlow()
 
     init {
-        observeFsmState()
-        observeLocation()
-        observeVehicles()
-        observeFeedStatus()
-        loadRoutes()
-        gtfsRtClient.startPolling()
+    bootstrapGtfsIfNeeded()
+    observeFsmState()
+    observeLocation()
+    observeVehicles()
+    observeFeedStatus()
+    loadRoutes()
+    gtfsRtClient.startPolling()
     }
 
     fun onPermissionsResult(granted: Boolean) {
@@ -96,6 +98,22 @@ class AppViewModel @Inject constructor(
         fsmEngine.state
             .onEach { rideState -> _state.update { it.copy(rideState = rideState) } }
             .launchIn(viewModelScope)
+    }
+    private fun bootstrapGtfsIfNeeded() {
+    viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        try {
+            if (routeDao.observeAll().first().isEmpty()) {
+                timber.log.Timber.i("GTFS: Empty database, downloading static feed...")
+                val url = java.net.URL(com.handleit.transit.common.TransitConfig.GTFS_STATIC_ZIP_URL)
+                url.openStream().use { stream ->
+                    gtfsParser.parseZip(stream)
+                }
+                timber.log.Timber.i("GTFS: Bootstrap complete")
+            }
+        } catch (e: Exception) {
+            timber.log.Timber.e(e, "GTFS bootstrap failed: ${e.message}")
+        }
+    }
     }
 
     private fun observeLocation() {
