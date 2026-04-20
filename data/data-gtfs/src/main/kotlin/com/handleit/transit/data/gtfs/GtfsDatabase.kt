@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import timber.log.Timber
-import java.io.File
 import java.io.FileOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -24,14 +23,23 @@ class TransitDb @Inject constructor(
 
     private var _db: SQLiteDatabase? = null
 
+    /**
+     * Manual getter to avoid the KSP 'by lazy' delegate error.
+     */
     private fun getDb(): SQLiteDatabase {
-        val currentDb = _db
-        if (currentDb != null && currentDb.isOpen) {
-            return currentDb
+        val current = _db
+        if (current != null && current.isOpen) return current
+        
+        return synchronized(this) {
+            val secondCheck = _db
+            if (secondCheck != null && secondCheck.isOpen) {
+                secondCheck
+            } else {
+                val opened = openOrCopyDatabase()
+                _db = opened
+                opened
+            }
         }
-        val newDb = openOrCopyDatabase()
-        _db = newDb
-        return newDb
     }
 
     private fun openOrCopyDatabase(): SQLiteDatabase {
@@ -52,7 +60,8 @@ class TransitDb @Inject constructor(
         return SQLiteDatabase.openDatabase(dbFile.path, null, SQLiteDatabase.OPEN_READONLY)
     }
 
-    // -- Stops --
+    // ── Stops ─────────────────────────────────────────────────────────────────
+
     suspend fun getStopById(id: String): Stop? = withContext(Dispatchers.IO) {
         try {
             getDb().rawQuery(
@@ -84,6 +93,8 @@ class TransitDb @Inject constructor(
             }
         }
 
+    // ── Routes ────────────────────────────────────────────────────────────────
+
     suspend fun getAllRoutes(): List<Route> = withContext(Dispatchers.IO) {
         try {
             getDb().rawQuery(
@@ -104,7 +115,8 @@ class TransitDb @Inject constructor(
         emit(getAllRoutes())
     }
 
-    // -- Cursor Helpers --
+    // ── Cursor Helpers ────────────────────────────────────────────────────────
+
     private fun android.database.Cursor.toStop() = Stop(
         stopId = getString(0),
         stopName = getString(1),
