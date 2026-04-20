@@ -1,8 +1,8 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -22,11 +22,6 @@ dependencies {
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
-
-    // Using 'api' to expose Room types to the :app module
-    api(libs.room.runtime)
-    api(libs.room.ktx)
-    ksp(libs.room.compiler)
 
     implementation(libs.coroutines.android)
     implementation(libs.timber)
