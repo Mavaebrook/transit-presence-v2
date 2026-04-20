@@ -1,8 +1,25 @@
 package com.handleit.transit.data.gtfsrt
 
-import com.handleit.transit.core.model.StopTimeUpdate
-import com.handleit.transit.core.model.TripUpdate
-import com.handleit.transit.core.model.VehiclePosition
+dependencies {
+    // 1. Internal Modules
+    implementation(project(":core:core-model"))
+    implementation(project(":core:core-common"))
+
+    // 2. Network & Logging (Required by GtfsRtClient)
+    implementation(libs.okhttp)
+    implementation(libs.timber)
+
+    // 3. Dependency Injection (Required for @Inject and @Singleton)
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler) 
+
+    // 4. Coroutines (Required for Flow and Scopes)
+    implementation(libs.kotlinx.coroutines.android)
+}
+
+import com.handleit.transit.model.StopTimeUpdate
+import com.handleit.transit.model.TripUpdate
+import com.handleit.transit.model.VehiclePosition
 import timber.log.Timber
 
 object GtfsRtParser {
