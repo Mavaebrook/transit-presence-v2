@@ -4,7 +4,6 @@ import android.content.Context
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.GeofencingClient
 import com.google.android.gms.location.LocationServices
-import com.handleit.transit.data.gtfs.TransitDb
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -19,8 +18,8 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object AppModule {
 
-    @Provides @Singleton
-    fun provideTransitDb(@ApplicationContext ctx: Context): TransitDb = TransitDb(ctx)
+    // TransitDb is provided via @Inject constructor in its own class, 
+    // so we don't need a @Provides method here anymore.
 
     @Provides @Singleton
     fun provideOkHttpClient(): OkHttpClient =
