@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,9 +20,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.size
+
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng as GmsLatLng
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.MarkerComposable
 import com.google.maps.android.compose.*
 
 import com.handleit.transit.common.MapProvider
@@ -46,12 +53,16 @@ fun MapScreen(
         when (state.mapProvider) {
             MapProvider.GOOGLE -> GoogleMapLayer(
                 state = state,
-                onStopTapped = { onIntent(MapIntent.StopSelected(it)) }
+                onStopTapped = { stop ->
+                    onIntent(MapIntent.StopSelected(stop))
+                }
             )
 
             MapProvider.OSM -> OsmMapLayer(
                 state = state,
-                onStopTapped = { onIntent(MapIntent.StopSelected(it)) }
+                onStopTapped = { stop ->
+                    onIntent(MapIntent.StopSelected(stop))
+                }
             )
         }
 
@@ -129,7 +140,7 @@ private fun GoogleMapLayer(
     LaunchedEffect(state.userLocation) {
         state.userLocation?.let {
             cameraState.animate(
-                update = CameraUpdateFactory.newLatLngZoom(
+                CameraUpdateFactory.newLatLngZoom(
                     GmsLatLng(it.lat, it.lng),
                     15f
                 )
@@ -201,7 +212,7 @@ private fun OsmMapLayer(
             }
 
             state.nearbyStops.forEach { stop ->
-                val marker = Marker(mapView).apply {
+                val marker = org.osmdroid.views.overlay.Marker(mapView).apply {
                     position = GeoPoint(stop.lat, stop.lng)
                     title = stop.stopName
                     setOnMarkerClickListener { _, _ ->
@@ -213,7 +224,7 @@ private fun OsmMapLayer(
             }
 
             state.nearbyVehicles.forEach { v ->
-                val marker = Marker(mapView).apply {
+                val marker = org.osmdroid.views.overlay.Marker(mapView).apply {
                     position = GeoPoint(v.lat, v.lng)
                     title = "Bus ${v.vehicleId}"
                     rotation = -(v.bearing ?: 0f)
