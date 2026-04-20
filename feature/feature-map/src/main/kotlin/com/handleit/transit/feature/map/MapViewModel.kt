@@ -3,10 +3,11 @@ package com.handleit.transit.feature.map
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.handleit.transit.common.MapProvider
+import com.handleit.transit.common.TransitConfig
 import com.handleit.transit.data.gtfs.TransitDb
 import com.handleit.transit.data.gtfsrt.GtfsRtClient
 import com.handleit.transit.data.location.LocationModule
-import com.handleit.transit.model.* // This provides FeedStatus, Vehicle, Stop, etc.
+import com.handleit.transit.model.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -37,8 +38,6 @@ sealed class MapIntent {
     object DismissStop : MapIntent()
     object ToggleMapProvider : MapIntent()
 }
-
-// REMOVED: enum class FeedStatus (It now lives in Models.kt)
 
 // -------------------- VIEWMODEL --------------------
 
@@ -74,7 +73,6 @@ class MapViewModel @Inject constructor(
             MapIntent.ToggleMapProvider -> {
                 val next = if (_uiState.value.mapProvider == MapProvider.GOOGLE)
                     MapProvider.OSM else MapProvider.GOOGLE
-
                 _uiState.update { it.copy(mapProvider = next) }
             }
         }
@@ -128,8 +126,9 @@ class MapViewModel @Inject constructor(
                 try {
                     _uiState.update { it.copy(feedStatus = FeedStatus.CONNECTING) }
 
-                    // If this line is red, check your GtfsRtClient.kt file!
-                    val vehicles = gtfsRtClient.fetchVehiclePositions()
+                    val vehicles = gtfsRtClient.fetchVehiclePositions(
+                        TransitConfig.GTFS_RT_VEHICLE_POSITIONS_URL
+                    )
 
                     _uiState.update {
                         it.copy(
@@ -142,7 +141,7 @@ class MapViewModel @Inject constructor(
                     _uiState.update { it.copy(feedStatus = FeedStatus.ERROR) }
                 }
 
-                delay(30_000) // Refresh every 30 seconds
+                delay(30_000)
             }
         }
     }
