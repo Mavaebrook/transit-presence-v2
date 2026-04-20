@@ -23,17 +23,16 @@ object TransitConfig {
 
     /**
      * Google Maps API Key.
-     * Only required when MAP_PROVIDER = MapProvider.GOOGLE (see Section 2).
+     * Only required when MAP_PROVIDER_DEFAULT = MapProvider.GOOGLE (see Section 2).
      *
-     * How to get one:
-     *   1. Go to https://console.cloud.google.com
-     *   2. Enable "Maps SDK for Android"
-     *   3. Create a credential → API Key
-     *   4. Restrict it to package name: com.handleit.transit
+     * Do not set this here. It is injected at startup by TransitApp (app module)
+     * from BuildConfig.GOOGLE_MAP_KEY, which is populated via the GOOGLE_MAP_KEY
+     * GitHub secret at build time.
      *
-     * If using OpenStreetMap, leave this as the placeholder — it is ignored.
+     * If using OpenStreetMap only, this will remain empty and is ignored.
      */
-    const val MAPS_API_KEY = BuildConfig.GOOGLE_MAP_KEY
+    var MAPS_API_KEY: String = ""
+
     // ─────────────────────────────────────────────────────────────────────────
     // SECTION 2: MAP PROVIDER
     // ─────────────────────────────────────────────────────────────────────────
@@ -87,7 +86,7 @@ object TransitConfig {
     /**
      * GTFS Static ZIP download URL.
      * The full schedule/stops/routes/shapes file.
-     * Downloaded once on first launch and cached in Room DB.
+     * Downloaded once on first launch and cached locally.
      */
     const val GTFS_STATIC_ZIP_URL =
         "https://www.golynx.com/plan-your-trip/google-transit.stml"
