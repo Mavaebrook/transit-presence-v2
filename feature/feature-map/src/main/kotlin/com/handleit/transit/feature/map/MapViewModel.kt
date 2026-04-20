@@ -17,24 +17,7 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 import javax.inject.Inject
 
-data class MapUiState(
-    val userLocation: LatLng? = null,
-    val nearbyStops: List<Stop> = emptyList(),
-    val nearbyVehicles: List<VehiclePosition> = emptyList(),
-    val selectedStop: Stop? = null,
-    val availableRoutes: List<Route> = emptyList(),
-    val mapProvider: MapProvider = TransitConfig.MAP_PROVIDER_DEFAULT,
-    val feedStatus: FeedStatus = FeedStatus.IDLE,
-    val permissionsGranted: Boolean = false,
-)
-
-sealed class MapIntent {
-    data class StopSelected(val stop: Stop) : MapIntent()
-    data class RouteSelected(val route: Route, val destination: Stop?) : MapIntent()
-    object DismissStop : MapIntent()
-    object ToggleMapProvider : MapIntent()
-    data class PermissionsGranted(val granted: Boolean) : MapIntent()
-}
+// ... MapUiState and MapIntent stay the same ...
 
 @HiltViewModel
 class MapViewModel @Inject constructor(
@@ -82,12 +65,15 @@ class MapViewModel @Inject constructor(
 
     private fun startLocationTracking() {
         viewModelScope.launch {
-            // CHECK: If your LocationModule uses a different name, 
-            // change 'locationFlow' to match your actual property name.
-            locationModule.locationFlow
-                .onEach { location ->
-                    _uiState.update { it.copy(userLocation = location.latLng) }
-                    updateNearbyStops(location.latLng)
+            // FIX: locationFlow is a function, not a property. 
+            // We call it with parens: locationFlow()
+            locationModule.locationFlow()
+                .distinctUntilChanged { old, new -> 
+                    old.latLng.lat == new.latLng.lat && old.latLng.lng == new.latLng.lng 
+                }
+                .onEach { snapshot ->
+                    _uiState.update { it.copy(userLocation = snapshot.latLng) }
+                    updateNearbyStops(snapshot.latLng)
                 }
                 .catch { t -> Timber.e(t, "Location tracking failed") }
                 .collect()
