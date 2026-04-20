@@ -1,8 +1,8 @@
 package com.handleit.transit.data.gtfsrt
 
-import com.handleit.transit.model.StopTimeUpdate
-import com.handleit.transit.model.TripUpdate
-import com.handleit.transit.model.VehiclePosition
+import com.handleit.transit.core.model.StopTimeUpdate
+import com.handleit.transit.core.model.TripUpdate
+import com.handleit.transit.core.model.VehiclePosition
 import timber.log.Timber
 
 object GtfsRtParser {
