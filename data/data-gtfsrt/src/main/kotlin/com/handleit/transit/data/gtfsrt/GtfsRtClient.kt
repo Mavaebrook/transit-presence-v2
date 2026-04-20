@@ -1,5 +1,10 @@
 package com.handleit.transit.data.gtfsrt
 
+import com.handleit.transit.model.StopTimeUpdate
+import com.handleit.transit.model.TripUpdate
+import com.handleit.transit.model.VehiclePosition
+import timber.log.Timber
+
 dependencies {
     // 1. Internal Modules
     implementation(project(":core:core-model"))
@@ -17,10 +22,6 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
 }
 
-import com.handleit.transit.model.StopTimeUpdate
-import com.handleit.transit.model.TripUpdate
-import com.handleit.transit.model.VehiclePosition
-import timber.log.Timber
 
 object GtfsRtParser {
 
