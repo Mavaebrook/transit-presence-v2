@@ -15,20 +15,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.size
-
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng as GmsLatLng
-import com.google.maps.android.compose.Marker
-import com.google.maps.android.compose.MarkerState
-import com.google.maps.android.compose.MarkerComposable
 import com.google.maps.android.compose.*
 
 import com.handleit.transit.common.MapProvider
@@ -38,7 +34,6 @@ import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.Marker
 
 // ---------------- ROOT SCREEN ----------------
 
@@ -81,6 +76,7 @@ fun MapScreen(
                     1.dp,
                     MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
                 ),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -98,7 +94,12 @@ fun MapScreen(
                 }
             }
 
-            IconButton(onClick = { onIntent(MapIntent.ToggleMapProvider) }) {
+            IconButton(
+                onClick = { onIntent(MapIntent.ToggleMapProvider) },
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+                )
+            ) {
                 Icon(Icons.Default.Layers, contentDescription = "Toggle map")
             }
         }
@@ -124,7 +125,7 @@ fun MapScreen(
     }
 }
 
-// ---------------- GOOGLE MAP ----------------
+// ---------------- GOOGLE MAP LAYER ----------------
 
 @Composable
 private fun GoogleMapLayer(
@@ -132,7 +133,6 @@ private fun GoogleMapLayer(
     onStopTapped: (Stop) -> Unit,
 ) {
     val defaultPos = GmsLatLng(28.5383, -81.3792)
-
     val cameraState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(defaultPos, 14f)
     }
@@ -151,15 +151,10 @@ private fun GoogleMapLayer(
     GoogleMap(
         modifier = Modifier.fillMaxSize(),
         cameraPositionState = cameraState,
-        properties = MapProperties(
-            isMyLocationEnabled = state.permissionsGranted
-        ),
-        uiSettings = MapUiSettings(
-            myLocationButtonEnabled = true
-        )
+        properties = MapProperties(isMyLocationEnabled = state.permissionsGranted),
+        uiSettings = MapUiSettings(myLocationButtonEnabled = true)
     ) {
-
-        // ---------------- STOPS ----------------
+        // STOPS
         state.nearbyStops.forEach { stop ->
             Marker(
                 state = MarkerState(GmsLatLng(stop.lat, stop.lng)),
@@ -171,7 +166,7 @@ private fun GoogleMapLayer(
             )
         }
 
-        // ---------------- VEHICLES ----------------
+        // VEHICLES
         state.nearbyVehicles.forEach { vehicle ->
             MarkerComposable(
                 state = MarkerState(GmsLatLng(vehicle.lat, vehicle.lng))
@@ -185,7 +180,7 @@ private fun GoogleMapLayer(
     }
 }
 
-// ---------------- OSM MAP ----------------
+// ---------------- OSM MAP LAYER ----------------
 
 @Composable
 private fun OsmMapLayer(
@@ -196,7 +191,6 @@ private fun OsmMapLayer(
         modifier = Modifier.fillMaxSize(),
         factory = { ctx ->
             Configuration.getInstance().userAgentValue = ctx.packageName
-
             MapView(ctx).apply {
                 setTileSource(TileSourceFactory.MAPNIK)
                 setMultiTouchControls(true)
@@ -231,21 +225,76 @@ private fun OsmMapLayer(
                 }
                 mapView.overlays.add(marker)
             }
-
             mapView.invalidate()
         }
     )
 }
 
-// ---------------- UI HELPERS ----------------
+// ---------------- UI HELPERS & COMPONENTS ----------------
+
+@Composable
+fun StopSelectionCard(
+    stop: Stop,
+    routes: List<Route>,
+    onDismiss: () -> Unit,
+    onRouteSelected: (Route) -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(stop.stopName, style = MaterialTheme.typography.titleLarge)
+                TextButton(onClick = onDismiss) { Text("Close") }
+            }
+            
+            Text("Available Routes:", style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(8.dp))
+            
+            routes.forEach { route ->
+                OutlinedButton(
+                    onClick = { onRouteSelected(route) },
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                ) {
+                    Text("Route ${route.shortName}: ${route.longName}")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun BusMarkerIcon(bearing: Float, routeId: String) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(40.dp)
+            .background(MaterialTheme.colorScheme.primary, CircleShape)
+            .rotate(bearing)
+    ) {
+        Icon(
+            imageVector = Icons.Default.DirectionsBus,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size(24.dp)
+        )
+    }
+}
 
 @Composable
 private fun FeedStatusDot(status: FeedStatus) {
     val color = when (status) {
-        FeedStatus.LIVE -> MaterialTheme.colorScheme.primary
-        FeedStatus.CONNECTING -> MaterialTheme.colorScheme.secondary
-        FeedStatus.ERROR -> MaterialTheme.colorScheme.error
-        FeedStatus.IDLE -> MaterialTheme.colorScheme.outline
+        FeedStatus.LIVE -> Color.Green
+        FeedStatus.CONNECTING -> Color.Yellow
+        FeedStatus.ERROR -> Color.Red
+        FeedStatus.IDLE -> Color.Gray
     }
 
     Box(
