@@ -31,13 +31,12 @@
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
         android:theme="@style/Theme.TransitPresence">
-        
 
-        <!-- Google Maps API Key — set MAPS_API_KEY in local.properties -->
+        <!-- Google Maps API Key — injected from GOOGLE_MAP_KEY GitHub secret at build time -->
         <!-- If empty, app falls back to OpenStreetMap automatically -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="${MAPS_API_KEY}" />
+            android:value="${GOOGLE_MAP_KEY}" />
 
         <activity
             android:name=".MainActivity"
