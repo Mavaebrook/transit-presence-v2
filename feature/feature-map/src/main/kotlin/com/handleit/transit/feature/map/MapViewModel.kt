@@ -9,8 +9,11 @@ import com.handleit.transit.data.gtfsrt.GtfsRtClient
 import com.handleit.transit.data.location.LocationModule
 import com.handleit.transit.model.*
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import timber.log.Timber
 import javax.inject.Inject
 
 data class MapUiState(
@@ -38,7 +41,93 @@ class MapViewModel @Inject constructor(
     private val gtfsRtClient: GtfsRtClient,
     private val transitDb: TransitDb,
 ) : ViewModel() {
-    
-    // ViewModel implementation logic relies on transitDb.getStopById(), transitDb.getAllRoutes(), etc.
 
+    private val _uiState = MutableStateFlow(MapUiState())
+    val uiState: StateFlow<MapUiState> = _uiState.asStateFlow()
+
+    fun handleIntent(intent: MapIntent) {
+        when (intent) {
+            is MapIntent.PermissionsGranted -> {
+                _uiState.update { it.copy(permissionsGranted = intent.granted) }
+                if (intent.granted) {
+                    loadInitialData()
+                    startLocationTracking()
+                    startRealtimeUpdates()
+                }
+            }
+            is MapIntent.StopSelected -> {
+                _uiState.update { it.copy(selectedStop = intent.stop) }
+            }
+            is MapIntent.DismissStop -> {
+                _uiState.update { it.copy(selectedStop = null) }
+            }
+            MapIntent.ToggleMapProvider -> {
+                val nextProvider = if (_uiState.value.mapProvider == MapProvider.GOOGLE) 
+                    MapProvider.OSM else MapProvider.GOOGLE
+                _uiState.update { it.copy(mapProvider = nextProvider) }
+            }
+            else -> { /* Handle route selection logic here */ }
+        }
+    }
+
+    private fun loadInitialData() {
+        viewModelScope.launch {
+            // "Time Peasant" Rule: Always move Plain SQL queries to the IO thread
+            val routes = withContext(Dispatchers.IO) {
+                try {
+                    transitDb.getAllRoutes()
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to load LYNX routes from SQLite")
+                    emptyList<Route>()
+                }
+            }
+            _uiState.update { it.copy(availableRoutes = routes) }
+        }
+    }
+
+    private fun startLocationTracking() {
+        viewModelScope.launch {
+            locationModule.getLocationUpdates()
+                .onEach { location ->
+                    _uiState.update { it.copy(userLocation = location.latLng) }
+                    updateNearbyStops(location.latLng)
+                }
+                .catch { e -> Timber.e(e, "Location stream failed") }
+                .collect()
+        }
+    }
+
+    private fun updateNearbyStops(latLng: LatLng) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val stops = try {
+                transitDb.getNearbyStops(latLng.lat, latLng.lng, radiusMeters = 1000.0)
+            } catch (e: Exception) {
+                Timber.e(e, "Query for nearby stops failed")
+                emptyList()
+            }
+            _uiState.update { it.copy(nearbyStops = stops) }
+        }
+    }
+
+    private fun startRealtimeUpdates() {
+        viewModelScope.launch {
+            // Polling LYNX GTFS-RT every 30 seconds
+            while (true) {
+                try {
+                    _uiState.update { it.copy(feedStatus = FeedStatus.CONNECTING) }
+                    val vehicles = gtfsRtClient.fetchVehiclePositions()
+                    _uiState.update { 
+                        it.copy(
+                            nearbyVehicles = vehicles,
+                            feedStatus = FeedStatus.LIVE 
+                        ) 
+                    }
+                } catch (e: Exception) {
+                    Timber.e(e, "GTFS-RT Refresh Failed")
+                    _uiState.update { it.copy(feedStatus = FeedStatus.ERROR) }
+                }
+                kotlinx.coroutines.delay(30_000)
+            }
+        }
+    }
 }
