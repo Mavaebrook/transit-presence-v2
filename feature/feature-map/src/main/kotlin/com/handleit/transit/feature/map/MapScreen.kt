@@ -34,6 +34,7 @@ import com.google.android.gms.maps.model.LatLng as GmsLatLng
 import com.google.maps.android.compose.*
 import com.handleit.transit.common.MapProvider
 import com.handleit.transit.model.*
+import com.handleit.transit.feature.map.MapIntent
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
