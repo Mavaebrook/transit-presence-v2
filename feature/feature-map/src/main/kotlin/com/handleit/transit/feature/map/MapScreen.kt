@@ -4,34 +4,36 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DirectionsBus
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.text.font.FontWeight
+
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng as GmsLatLng
 import com.google.maps.android.compose.*
+
 import com.handleit.transit.common.MapProvider
 import com.handleit.transit.model.*
+
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
+
+// ---------------- ROOT SCREEN ----------------
 
 @Composable
 fun MapScreen(
@@ -42,14 +44,18 @@ fun MapScreen(
     Box(modifier = Modifier.fillMaxSize()) {
 
         when (state.mapProvider) {
-            MapProvider.GOOGLE -> GoogleMapLayer(state) {
-                onIntent(MapIntent.StopSelected(it))
-            }
-            MapProvider.OSM -> OsmMapLayer(state) {
-                onIntent(MapIntent.StopSelected(it))
-            }
+            MapProvider.GOOGLE -> GoogleMapLayer(
+                state = state,
+                onStopTapped = { onIntent(MapIntent.StopSelected(it)) }
+            )
+
+            MapProvider.OSM -> OsmMapLayer(
+                state = state,
+                onStopTapped = { onIntent(MapIntent.StopSelected(it)) }
+            )
         }
 
+        // ---------------- TOP BAR ----------------
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -60,7 +66,10 @@ fun MapScreen(
         ) {
             Surface(
                 shape = RoundedCornerShape(10.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                border = BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                ),
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -83,6 +92,7 @@ fun MapScreen(
             }
         }
 
+        // ---------------- BOTTOM SHEET ----------------
         AnimatedVisibility(
             visible = state.selectedStop != null,
             enter = slideInVertically { it },
@@ -104,6 +114,7 @@ fun MapScreen(
 }
 
 // ---------------- GOOGLE MAP ----------------
+
 @Composable
 private fun GoogleMapLayer(
     state: MapUiState,
@@ -118,7 +129,7 @@ private fun GoogleMapLayer(
     LaunchedEffect(state.userLocation) {
         state.userLocation?.let {
             cameraState.animate(
-                CameraUpdateFactory.newLatLngZoom(
+                update = CameraUpdateFactory.newLatLngZoom(
                     GmsLatLng(it.lat, it.lng),
                     15f
                 )
@@ -163,3 +174,72 @@ private fun GoogleMapLayer(
     }
 }
 
+// ---------------- OSM MAP ----------------
+
+@Composable
+private fun OsmMapLayer(
+    state: MapUiState,
+    onStopTapped: (Stop) -> Unit,
+) {
+    AndroidView(
+        modifier = Modifier.fillMaxSize(),
+        factory = { ctx ->
+            Configuration.getInstance().userAgentValue = ctx.packageName
+
+            MapView(ctx).apply {
+                setTileSource(TileSourceFactory.MAPNIK)
+                setMultiTouchControls(true)
+                controller.setZoom(15.0)
+                controller.setCenter(GeoPoint(28.5383, -81.3792))
+            }
+        },
+        update = { mapView ->
+            mapView.overlays.clear()
+
+            state.userLocation?.let {
+                mapView.controller.animateTo(GeoPoint(it.lat, it.lng))
+            }
+
+            state.nearbyStops.forEach { stop ->
+                val marker = Marker(mapView).apply {
+                    position = GeoPoint(stop.lat, stop.lng)
+                    title = stop.stopName
+                    setOnMarkerClickListener { _, _ ->
+                        onStopTapped(stop)
+                        true
+                    }
+                }
+                mapView.overlays.add(marker)
+            }
+
+            state.nearbyVehicles.forEach { v ->
+                val marker = Marker(mapView).apply {
+                    position = GeoPoint(v.lat, v.lng)
+                    title = "Bus ${v.vehicleId}"
+                    rotation = -(v.bearing ?: 0f)
+                }
+                mapView.overlays.add(marker)
+            }
+
+            mapView.invalidate()
+        }
+    )
+}
+
+// ---------------- UI HELPERS ----------------
+
+@Composable
+private fun FeedStatusDot(status: FeedStatus) {
+    val color = when (status) {
+        FeedStatus.LIVE -> MaterialTheme.colorScheme.primary
+        FeedStatus.CONNECTING -> MaterialTheme.colorScheme.secondary
+        FeedStatus.ERROR -> MaterialTheme.colorScheme.error
+        FeedStatus.IDLE -> MaterialTheme.colorScheme.outline
+    }
+
+    Box(
+        modifier = Modifier
+            .size(8.dp)
+            .background(color, CircleShape)
+    )
+}
