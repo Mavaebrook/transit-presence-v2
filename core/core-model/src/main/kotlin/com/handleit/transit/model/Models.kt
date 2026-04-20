@@ -25,6 +25,10 @@ data class Route(
     val routeTextColor: String = "000000",
 )
 
+// Extension properties to help MapScreen.kt which expects 'shortName' and 'longName'
+val Route.shortName: String get() = routeShortName
+val Route.longName: String get() = routeLongName
+
 data class Trip(
     val tripId: String,
     val routeId: String,
@@ -51,10 +55,15 @@ data class ShapePoint(
 
 // ─── GTFS-RT Live ─────────────────────────────────────────────────────────────
 
+/**
+ * Maps the live position to a 'Vehicle' name for UI compatibility 
+ */
+typealias Vehicle = VehiclePosition
+
 data class VehiclePosition(
     val vehicleId: String,
     val tripId: String?,
-    val routeId: String?,
+    val routeId: String, // Made non-nullable to satisfy MapScreen logic
     val lat: Double,
     val lng: Double,
     val bearing: Float?,
