@@ -16,8 +16,9 @@ android {
         versionCode = 1
         versionName = "1.0.0"
 
-        val mapsKey = project.findProperty("MAPS_API_KEY")?.toString() ?: ""
-        manifestPlaceholders["MAPS_API_KEY"] = mapsKey
+        val mapsKey = project.findProperty("GOOGLE_MAP_KEY")?.toString() ?: ""
+        manifestPlaceholders["GOOGLE_MAP_KEY"] = mapsKey
+        buildConfigField("String", "GOOGLE_MAP_KEY", "\"$mapsKey\"")
     }
 
     buildTypes {
@@ -67,11 +68,11 @@ dependencies {
     // --- FIX: Missing DI types for AppModule ---
     // Location Services (Provides FusedLocationProviderClient)
     implementation("com.google.android.gms:play-services-location:21.2.0")
-    
+
     // Networking (Provides OkHttpClient & Logging)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
-    
+
     // Database (Provides TransitDatabase and DAOs)
     // ------------------------------------------
 
