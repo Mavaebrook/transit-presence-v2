@@ -31,7 +31,7 @@ jobs:
         run: echo "sdk.dir=$ANDROID_SDK_ROOT" >> local.properties
 
       - name: Set Maps API key
-        run: echo "MAPS_API_KEY=${{ secrets.MAPS_API_KEY }}" >> local.properties
+        run: echo "MAPS_API_KEY=${{ secrets.GOOGLE_MAP_KEY }}" >> local.properties
 
       - name: Install Gradle and generate wrapper JAR
         run: |
