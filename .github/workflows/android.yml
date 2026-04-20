@@ -1,4 +1,4 @@
-name: Build Debug APK
+Name: Build Debug APK
 
 on:
   push:
@@ -7,22 +7,33 @@ on:
 
 jobs:
   build:
+    # 2026 baseline: ubuntu-latest is fine, but ensure actions are modern
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Bumping to v5/v6 to resolve Node 20 deprecation warnings
+      - uses: actions/checkout@v5 
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
       - name: Build pre-populated GTFS database
         run: |
+          # Ensure dependencies for the script are installed if needed
+          # python -m pip install ... 
           python scripts/build_gtfs_db.py
-          # Verify the file was created in the assets directory
-          ls -lh app/src/main/assets/transit_prepopulated.db || echo "Database file missing!"
+          
+          # VERIFICATION: This is where your previous build failed.
+          # The script MUST output a .db file now, not just .sql
+          if [ -f "app/src/main/assets/transit_prepopulated.db" ]; then
+            ls -lh app/src/main/assets/transit_prepopulated.db
+          else
+            echo "::error::Database file was not generated! Build will fail."
+            exit 1
+          fi
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -34,27 +45,19 @@ jobs:
       - name: Set Maps API key
         run: echo "MAPS_API_KEY=${{ secrets.MAPS_API_KEY }}" >> local.properties
 
-      - name: Install Gradle and generate wrapper JAR
-        run: |
-          wget -q https://services.gradle.org/distributions/gradle-8.6-bin.zip -O /tmp/gradle.zip
-          unzip -q /tmp/gradle.zip -d /tmp/gradle
-          /tmp/gradle/gradle-8.6/bin/gradle wrapper --gradle-version 8.6
-          chmod +x gradlew
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
 
       - name: Build debug APK
+        # -x lint saves time; --stacktrace helps debug the GtfsRtParser error
         run: ./gradlew assembleDebug --stacktrace -x lint
 
-      - name: Extract Room Hash
+      - name: Clean up and Verify
         run: |
           echo "--------------------------------------------------"
-          echo "SEARCHING FOR ROOM IDENTITY HASH..."
-          # Locates the hash in the generated implementation file
-          HASH=$(grep -r "identityHash =" . | grep "_Impl.java" | head -1 | awk -F'"' '{print $2}')
-          if [ -z "$HASH" ]; then
-            echo "HASH NOT FOUND. Ensure the Room compiler (KSP/KAPT) ran successfully."
-          else
-            echo "YOUR_ROOM_IDENTITY_HASH: $HASH"
-          fi
+          echo "Build Complete. Vanilla SQLite DB verified in assets."
+          # We removed the Room Hash step because you are avoiding Room.
+          # Keeping that step would only cause "Hash Not Found" errors.
           echo "--------------------------------------------------"
 
       - uses: actions/upload-artifact@v4
