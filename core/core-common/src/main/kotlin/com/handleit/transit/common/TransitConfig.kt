@@ -55,7 +55,7 @@ object TransitConfig {
      * Users can toggle between providers at runtime in Settings.
      * This value sets the default when the app is first installed.
      */
-    val MAP_PROVIDER_DEFAULT: MapProvider = MapProvider.OSM
+    val MAP_PROVIDER_DEFAULT: MapProvider = MapProvider.GOOGLE
 
     // ─────────────────────────────────────────────────────────────────────────
     // SECTION 3: GTFS FEED URLs  (Central Florida / LYNX — pre-filled)
