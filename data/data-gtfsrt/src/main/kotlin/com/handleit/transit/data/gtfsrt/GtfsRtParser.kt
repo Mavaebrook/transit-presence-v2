@@ -114,11 +114,11 @@ object GtfsRtParser {
         }
 
         if (lat == 0.0 && lng == 0.0) return null
-        
+
         return VehiclePosition(
             vehicleId = vehicleId,
             tripId = tripId,
-            routeId = routeId,
+            routeId = routeId ?: "",
             lat = lat,
             lng = lng,
             bearing = bearing,
@@ -183,7 +183,7 @@ object GtfsRtParser {
         }
 
         if (tripId.isEmpty()) return null
-        
+
         return TripUpdate(
             tripId = tripId,
             routeId = routeId,
@@ -233,11 +233,8 @@ object GtfsRtParser {
             return null
         }
 
-        // Drop records with no stopId — a StopTimeUpdate without one is unusable
-        val resolvedStopId = stopId ?: return null
-
         return StopTimeUpdate(
-            stopId = resolvedStopId,
+            stopId = stopId,
             stopSequence = stopSeq,
             arrivalEpochSecs = arrivalSecs,
             departureEpochSecs = departureSecs,
@@ -254,8 +251,8 @@ class ProtoReader(private val bytes: ByteArray) {
     fun readTag(): Int {
         if (!hasMore()) return 0
         val varint = readVarInt()
-        currentWireType = (varint and 0x07).toInt() // Extract the lowest 3 bits for wire type
-        return (varint ushr 3).toInt()              // Shift right to get the actual field tag
+        currentWireType = (varint and 0x07).toInt()
+        return (varint ushr 3).toInt()
     }
 
     fun readVarInt(): Long {
@@ -293,14 +290,14 @@ class ProtoReader(private val bytes: ByteArray) {
     fun skipField() {
         try {
             when (currentWireType) {
-                0 -> readVarInt()          // Wire Type 0: Varint
-                1 -> pos += 8              // Wire Type 1: 64-bit
-                2 -> {                     // Wire Type 2: Length-delimited
+                0 -> readVarInt()
+                1 -> pos += 8
+                2 -> {
                     val len = readVarInt().toInt()
                     pos += len
                 }
-                5 -> pos += 4              // Wire Type 5: 32-bit
-                else -> pos = bytes.size   // Unknown/Corrupt wire type, push to end to break loop
+                5 -> pos += 4
+                else -> pos = bytes.size
             }
         } catch (e: Exception) {
             pos = bytes.size
