@@ -5,24 +5,6 @@ import com.handleit.transit.model.TripUpdate
 import com.handleit.transit.model.VehiclePosition
 import timber.log.Timber
 
-dependencies {
-    // 1. Internal Modules
-    implementation(project(":core:core-model"))
-    implementation(project(":core:core-common"))
-
-    // 2. Network & Logging (Required by GtfsRtClient)
-    implementation(libs.okhttp)
-    implementation(libs.timber)
-
-    // 3. Dependency Injection (Required for @Inject and @Singleton)
-    implementation(libs.hilt.android)
-    ksp(libs.hilt.compiler) 
-
-    // 4. Coroutines (Required for Flow and Scopes)
-    implementation(libs.kotlinx.coroutines.android)
-}
-
-
 object GtfsRtParser {
 
     fun parseVehiclePositions(bytes: ByteArray): List<VehiclePosition> {
