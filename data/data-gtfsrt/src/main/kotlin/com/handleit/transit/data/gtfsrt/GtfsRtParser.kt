@@ -231,8 +231,11 @@ object GtfsRtParser {
             return null
         }
 
+        // Drop records with no stopId — a StopTimeUpdate without one is unusable
+        val resolvedStopId = stopId ?: return null
+
         return StopTimeUpdate(
-            stopId = stopId,
+            stopId = resolvedStopId,
             stopSequence = stopSeq,
             arrivalEpochSecs = arrivalSecs,
             departureEpochSecs = departureSecs,
