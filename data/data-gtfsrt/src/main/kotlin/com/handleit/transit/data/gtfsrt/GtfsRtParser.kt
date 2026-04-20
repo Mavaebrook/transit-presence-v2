@@ -13,7 +13,7 @@ object GtfsRtParser {
             val reader = ProtoReader(bytes)
             while (reader.hasMore()) {
                 when (reader.readTag()) {
-                    2 -> {
+                    2 -> { // FeedEntity
                         val entityBytes = reader.readBytes()
                         parseVehicleEntity(entityBytes)?.let { result.add(it) }
                     }
@@ -32,7 +32,7 @@ object GtfsRtParser {
             val reader = ProtoReader(bytes)
             while (reader.hasMore()) {
                 when (reader.readTag()) {
-                    2 -> {
+                    2 -> { // FeedEntity
                         val entityBytes = reader.readBytes()
                         parseTripUpdateEntity(entityBytes)?.let { result.add(it) }
                     }
@@ -60,12 +60,12 @@ object GtfsRtParser {
             val reader = ProtoReader(bytes)
             while (reader.hasMore()) {
                 when (reader.readTag()) {
-                    4 -> {
+                    4 -> { // VehiclePosition
                         val vBytes = reader.readBytes()
                         val vReader = ProtoReader(vBytes)
                         while (vReader.hasMore()) {
                             when (vReader.readTag()) {
-                                1 -> {
+                                1 -> { // TripDescriptor
                                     val tBytes = vReader.readBytes()
                                     val tReader = ProtoReader(tBytes)
                                     while (tReader.hasMore()) {
@@ -76,7 +76,7 @@ object GtfsRtParser {
                                         }
                                     }
                                 }
-                                2 -> {
+                                2 -> { // Position
                                     val pBytes = vReader.readBytes()
                                     val pReader = ProtoReader(pBytes)
                                     while (pReader.hasMore()) {
@@ -90,7 +90,7 @@ object GtfsRtParser {
                                     }
                                 }
                                 3 -> stopSeq = vReader.readVarInt().toInt()
-                                5 -> {
+                                5 -> { // VehicleDescriptor
                                     val dBytes = vReader.readBytes()
                                     val dReader = ProtoReader(dBytes)
                                     while (dReader.hasMore()) {
@@ -114,6 +114,7 @@ object GtfsRtParser {
         }
 
         if (lat == 0.0 && lng == 0.0) return null
+        
         return VehiclePosition(
             vehicleId = vehicleId,
             tripId = tripId,
@@ -138,12 +139,12 @@ object GtfsRtParser {
             val reader = ProtoReader(bytes)
             while (reader.hasMore()) {
                 when (reader.readTag()) {
-                    3 -> {
+                    3 -> { // TripUpdate
                         val tuBytes = reader.readBytes()
                         val tuReader = ProtoReader(tuBytes)
                         while (tuReader.hasMore()) {
                             when (tuReader.readTag()) {
-                                1 -> {
+                                1 -> { // TripDescriptor
                                     val tBytes = tuReader.readBytes()
                                     val tReader = ProtoReader(tBytes)
                                     while (tReader.hasMore()) {
@@ -154,11 +155,11 @@ object GtfsRtParser {
                                         }
                                     }
                                 }
-                                3 -> {
+                                3 -> { // StopTimeUpdate (repeated)
                                     val stuBytes = tuReader.readBytes()
                                     parseStopTimeUpdate(stuBytes)?.let { stopUpdates.add(it) }
                                 }
-                                4 -> {
+                                4 -> { // VehicleDescriptor
                                     val vBytes = tuReader.readBytes()
                                     val vReader = ProtoReader(vBytes)
                                     while (vReader.hasMore()) {
@@ -182,6 +183,7 @@ object GtfsRtParser {
         }
 
         if (tripId.isEmpty()) return null
+        
         return TripUpdate(
             tripId = tripId,
             routeId = routeId,
@@ -202,7 +204,7 @@ object GtfsRtParser {
             while (reader.hasMore()) {
                 when (reader.readTag()) {
                     1 -> stopSeq = reader.readVarInt().toInt()
-                    2 -> {
+                    2 -> { // Arrival
                         val aBytes = reader.readBytes()
                         val aReader = ProtoReader(aBytes)
                         while (aReader.hasMore()) {
@@ -212,7 +214,7 @@ object GtfsRtParser {
                             }
                         }
                     }
-                    3 -> {
+                    3 -> { // Departure
                         val dBytes = reader.readBytes()
                         val dReader = ProtoReader(dBytes)
                         while (dReader.hasMore()) {
@@ -245,12 +247,15 @@ object GtfsRtParser {
 
 class ProtoReader(private val bytes: ByteArray) {
     private var pos = 0
+    private var currentWireType = -1
 
     fun hasMore() = pos < bytes.size
 
     fun readTag(): Int {
+        if (!hasMore()) return 0
         val varint = readVarInt()
-        return (varint ushr 3).toInt()
+        currentWireType = (varint and 0x07).toInt() // Extract the lowest 3 bits for wire type
+        return (varint ushr 3).toInt()              // Shift right to get the actual field tag
     }
 
     fun readVarInt(): Long {
@@ -287,7 +292,16 @@ class ProtoReader(private val bytes: ByteArray) {
 
     fun skipField() {
         try {
-            readVarInt()
+            when (currentWireType) {
+                0 -> readVarInt()          // Wire Type 0: Varint
+                1 -> pos += 8              // Wire Type 1: 64-bit
+                2 -> {                     // Wire Type 2: Length-delimited
+                    val len = readVarInt().toInt()
+                    pos += len
+                }
+                5 -> pos += 4              // Wire Type 5: 32-bit
+                else -> pos = bytes.size   // Unknown/Corrupt wire type, push to end to break loop
+            }
         } catch (e: Exception) {
             pos = bytes.size
         }
