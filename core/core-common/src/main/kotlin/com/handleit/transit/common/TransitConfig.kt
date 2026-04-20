@@ -33,7 +33,7 @@ object TransitConfig {
      *
      * If using OpenStreetMap, leave this as the placeholder — it is ignored.
      */
-    const val MAPS_API_KEY = BuildConfig.MAPS_API_KEY
+    const val MAPS_API_KEY = BuildConfig.GOOGLE_MAP_KEY
     // ─────────────────────────────────────────────────────────────────────────
     // SECTION 2: MAP PROVIDER
     // ─────────────────────────────────────────────────────────────────────────
