@@ -1,17 +1,10 @@
 package com.handleit.transit.app
 
 import android.content.Context
-import androidx.room.Room
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.GeofencingClient
 import com.google.android.gms.location.LocationServices
-import com.handleit.transit.data.gtfs.RouteDao
-import com.handleit.transit.data.gtfs.ShapeDao
-import com.handleit.transit.data.gtfs.StopDao
-import com.handleit.transit.data.gtfs.StopTimeDao
-import com.handleit.transit.data.gtfs.TransitDatabase
-import com.handleit.transit.data.gtfs.TripDao
-import com.handleit.transit.data.gtfsrt.GtfsRtClient
+import com.handleit.transit.data.gtfs.TransitDb
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -27,17 +20,7 @@ import javax.inject.Singleton
 object AppModule {
 
     @Provides @Singleton
-fun provideDatabase(@ApplicationContext ctx: Context): TransitDatabase =
-    Room.databaseBuilder(ctx, TransitDatabase::class.java, "transit.db")
-        .createFromAsset("transit_prepopulated.db")
-        .fallbackToDestructiveMigration()
-        .build()
-
-    @Provides fun provideStopDao(db: TransitDatabase): StopDao         = db.stopDao()
-    @Provides fun provideRouteDao(db: TransitDatabase): RouteDao       = db.routeDao()
-    @Provides fun provideTripDao(db: TransitDatabase): TripDao         = db.tripDao()
-    @Provides fun provideStopTimeDao(db: TransitDatabase): StopTimeDao = db.stopTimeDao()
-    @Provides fun provideShapeDao(db: TransitDatabase): ShapeDao       = db.shapeDao()
+    fun provideTransitDb(@ApplicationContext ctx: Context): TransitDb = TransitDb(ctx)
 
     @Provides @Singleton
     fun provideOkHttpClient(): OkHttpClient =
@@ -50,10 +33,14 @@ fun provideDatabase(@ApplicationContext ctx: Context): TransitDatabase =
             .build()
 
     @Provides @Singleton
-    fun provideFusedLocation(@ApplicationContext ctx: Context): FusedLocationProviderClient =
+    fun provideFusedLocation(
+        @ApplicationContext ctx: Context,
+    ): FusedLocationProviderClient =
         LocationServices.getFusedLocationProviderClient(ctx)
 
     @Provides @Singleton
-    fun provideGeofencingClient(@ApplicationContext ctx: Context): GeofencingClient =
+    fun provideGeofencingClient(
+        @ApplicationContext ctx: Context,
+    ): GeofencingClient =
         LocationServices.getGeofencingClient(ctx)
 }
