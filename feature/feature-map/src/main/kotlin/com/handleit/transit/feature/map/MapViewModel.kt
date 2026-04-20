@@ -6,7 +6,7 @@ import com.handleit.transit.common.MapProvider
 import com.handleit.transit.data.gtfs.TransitDb
 import com.handleit.transit.data.gtfsrt.GtfsRtClient
 import com.handleit.transit.data.location.LocationModule
-import com.handleit.transit.model.*
+import com.handleit.transit.model.* // This provides FeedStatus, Vehicle, Stop, etc.
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -38,14 +38,7 @@ sealed class MapIntent {
     object ToggleMapProvider : MapIntent()
 }
 
-// -------------------- FEED STATUS --------------------
-
-enum class FeedStatus {
-    IDLE,
-    CONNECTING,
-    LIVE,
-    ERROR
-}
+// REMOVED: enum class FeedStatus (It now lives in Models.kt)
 
 // -------------------- VIEWMODEL --------------------
 
@@ -135,6 +128,7 @@ class MapViewModel @Inject constructor(
                 try {
                     _uiState.update { it.copy(feedStatus = FeedStatus.CONNECTING) }
 
+                    // If this line is red, check your GtfsRtClient.kt file!
                     val vehicles = gtfsRtClient.fetchVehiclePositions()
 
                     _uiState.update {
@@ -148,7 +142,7 @@ class MapViewModel @Inject constructor(
                     _uiState.update { it.copy(feedStatus = FeedStatus.ERROR) }
                 }
 
-                delay(30_000)
+                delay(30_000) // Refresh every 30 seconds
             }
         }
     }
