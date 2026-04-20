@@ -103,7 +103,6 @@ fun MapScreen(
 }
 
 // ---------------- GOOGLE MAP ----------------
-
 @Composable
 private fun GoogleMapLayer(
     state: MapUiState,
@@ -137,4 +136,29 @@ private fun GoogleMapLayer(
         )
     ) {
 
-        // Stops
+        // ---------------- STOPS ----------------
+        state.nearbyStops.forEach { stop ->
+            Marker(
+                state = MarkerState(GmsLatLng(stop.lat, stop.lng)),
+                title = stop.stopName,
+                onClick = {
+                    onStopTapped(stop)
+                    true
+                }
+            )
+        }
+
+        // ---------------- VEHICLES ----------------
+        state.nearbyVehicles.forEach { vehicle ->
+            MarkerComposable(
+                state = MarkerState(GmsLatLng(vehicle.lat, vehicle.lng))
+            ) {
+                BusMarkerIcon(
+                    bearing = vehicle.bearing ?: 0f,
+                    routeId = vehicle.routeId
+                )
+            }
+        }
+    }
+}
+
