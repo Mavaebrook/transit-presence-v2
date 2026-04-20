@@ -33,7 +33,7 @@ object TransitConfig {
      *
      * If using OpenStreetMap, leave this as the placeholder — it is ignored.
      */
-    const val MAPS_API_KEY = "AIzaSyC9HCFtqOrR9ZCwIisVm-FJ5OIeU88Ort0"
+    const val MAPS_API_KEY = BuildConfig.MAPS_API_KEY
     // ─────────────────────────────────────────────────────────────────────────
     // SECTION 2: MAP PROVIDER
     // ─────────────────────────────────────────────────────────────────────────
