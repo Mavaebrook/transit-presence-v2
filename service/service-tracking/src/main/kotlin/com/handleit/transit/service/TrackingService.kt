@@ -9,11 +9,8 @@ import androidx.core.app.NotificationManagerCompat
 import com.handleit.transit.common.TransitConfig
 import com.handleit.transit.data.gtfsrt.GtfsRtClient
 import com.handleit.transit.data.location.LocationModule
-import com.handleit.transit.fsm.RideState
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -35,6 +32,7 @@ class TrackingService : Service() {
     @Inject lateinit var gtfsRtClient: GtfsRtClient
 
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private var pollingJob: Job? = null
 
     companion object {
         const val ACTION_START = "com.handleit.transit.START"
@@ -66,14 +64,27 @@ class TrackingService : Service() {
     }
 
     private fun startTracking() {
-        // Start GTFS-RT polling
-        gtfsRtClient.startPolling(TransitConfig.GTFS_RT_POLL_INTERVAL_MS)
+        // GTFS-RT polling loop — runs on interval defined in TransitConfig
+        pollingJob = scope.launch {
+            while (isActive) {
+                try {
+                    val vehicles = gtfsRtClient.fetchVehiclePositions(
+                        TransitConfig.GTFS_RT_VEHICLE_POSITIONS_URL
+                    )
+                    val trips = gtfsRtClient.fetchTripUpdates(
+                        TransitConfig.GTFS_RT_TRIP_UPDATES_URL
+                    )
+                    Timber.v("GTFS-RT: ${vehicles.size} vehicles, ${trips.size} trip updates")
+                } catch (e: Exception) {
+                    Timber.e(e, "GTFS-RT poll failed: ${e.message}")
+                }
+                delay(TransitConfig.GTFS_RT_POLL_INTERVAL_MS)
+            }
+        }
 
-        // Location updates — feeds into orchestrator via the app module
+        // Location updates — keeps stream alive for orchestrator
         scope.launch {
             locationModule.locationFlow().collect { snapshot ->
-                // Location is consumed by the orchestrator in the app module
-                // The service just needs to keep the stream alive
                 Timber.v("Location: ${snapshot.latLng.lat}, ${snapshot.latLng.lng}")
             }
         }
@@ -87,7 +98,7 @@ class TrackingService : Service() {
     }
 
     override fun onDestroy() {
-        gtfsRtClient.stopPolling()
+        pollingJob?.cancel()
         scope.cancel()
         Timber.i("TrackingService: Destroyed")
         super.onDestroy()
