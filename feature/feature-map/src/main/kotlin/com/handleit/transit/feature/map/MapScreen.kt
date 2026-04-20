@@ -29,6 +29,10 @@ import com.google.maps.android.compose.*
 
 import com.handleit.transit.common.MapProvider
 import com.handleit.transit.model.*
+import com.handleit.transit.model.FeedStatus
+import com.handleit.transit.model.Route
+import com.handleit.transit.model.Stop
+import com.handleit.transit.model.Vehicle
 
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
