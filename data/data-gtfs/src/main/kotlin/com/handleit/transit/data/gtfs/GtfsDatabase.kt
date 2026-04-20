@@ -1,299 +1,260 @@
 package com.handleit.transit.data.gtfs
 
-import androidx.room.*
+import android.content.Context
+import android.database.sqlite.SQLiteDatabase
+import android.database.sqlite.SQLiteOpenHelper
 import com.handleit.transit.model.*
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import timber.log.Timber
-import java.io.InputStream
-import java.util.zip.ZipInputStream
+import java.io.File
+import java.io.FileOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
-// ─── Room Entities ────────────────────────────────────────────────────────────
-
-@Entity(tableName = "stops")
-data class StopEntity(
-    @PrimaryKey val stopId: String,
-    val stopName: String,
-    val lat: Double,
-    val lng: Double,
-    val wheelchairBoarding: Int = 0,
-) {
-    fun toModel() = Stop(stopId, stopName, lat, lng, wheelchairBoarding)
-}
-
-@Entity(tableName = "routes")
-data class RouteEntity(
-    @PrimaryKey val routeId: String,
-    val routeShortName: String,
-    val routeLongName: String,
-    val routeType: Int,
-    val routeColor: String = "FFFFFF",
-    val routeTextColor: String = "000000",
-) {
-    fun toModel() = Route(routeId, routeShortName, routeLongName, routeType, routeColor, routeTextColor)
-}
-
-@Entity(tableName = "trips")
-data class TripEntity(
-    @PrimaryKey val tripId: String,
-    val routeId: String,
-    val serviceId: String,
-    val tripHeadsign: String = "",
-    val directionId: Int = 0,
-    val shapeId: String = "",
-) {
-    fun toModel() = Trip(tripId, routeId, serviceId, tripHeadsign, directionId, shapeId)
-}
-
-@Entity(tableName = "stop_times", primaryKeys = ["tripId", "stopSequence"])
-data class StopTimeEntity(
-    val tripId: String,
-    val stopId: String,
-    val stopSequence: Int,
-    val arrivalTime: String,
-    val departureTime: String,
-) {
-    fun toModel() = StopTime(tripId, stopId, stopSequence, arrivalTime, departureTime)
-}
-
-@Entity(tableName = "shapes", primaryKeys = ["shapeId", "sequence"])
-data class ShapeEntity(
-    val shapeId: String,
-    val lat: Double,
-    val lng: Double,
-    val sequence: Int,
-) {
-    fun toModel() = ShapePoint(shapeId, lat, lng, sequence)
-}
-
-// ─── DAOs ─────────────────────────────────────────────────────────────────────
-
-@Dao
-interface StopDao {
-    @Query("SELECT * FROM stops WHERE stopId = :id LIMIT 1")
-    suspend fun getById(id: String): StopEntity?
-
-    @Query("""
-        SELECT * FROM stops
-        ORDER BY ((lat - :lat) * (lat - :lat) + (lng - :lng) * (lng - :lng))
-        LIMIT :limit
-    """)
-    suspend fun getNearby(lat: Double, lng: Double, limit: Int = 20): List<StopEntity>
-
-    @Query("SELECT COUNT(*) FROM stops")
-    suspend fun count(): Int
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertAll(stops: List<StopEntity>)
-}
-
-@Dao
-interface RouteDao {
-    @Query("SELECT * FROM routes WHERE routeId = :id LIMIT 1")
-    suspend fun getById(id: String): RouteEntity?
-
-    @Query("SELECT * FROM routes ORDER BY routeShortName")
-    fun observeAll(): Flow<List<RouteEntity>>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertAll(routes: List<RouteEntity>)
-}
-
-@Dao
-interface TripDao {
-    @Query("SELECT * FROM trips WHERE tripId = :id LIMIT 1")
-    suspend fun getById(id: String): TripEntity?
-
-    @Query("SELECT * FROM trips WHERE routeId = :routeId")
-    suspend fun getByRoute(routeId: String): List<TripEntity>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertAll(trips: List<TripEntity>)
-}
-
-@Dao
-interface StopTimeDao {
-    @Query("SELECT * FROM stop_times WHERE tripId = :tripId ORDER BY stopSequence")
-    suspend fun getForTrip(tripId: String): List<StopTimeEntity>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertAll(stopTimes: List<StopTimeEntity>)
-}
-
-@Dao
-interface ShapeDao {
-    @Query("SELECT * FROM shapes WHERE shapeId = :shapeId ORDER BY sequence")
-    suspend fun getShape(shapeId: String): List<ShapeEntity>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertAll(points: List<ShapeEntity>)
-}
-
-// ─── Database ─────────────────────────────────────────────────────────────────
-
-@Database(
-    entities = [StopEntity::class, RouteEntity::class, TripEntity::class,
-                StopTimeEntity::class, ShapeEntity::class],
-    version = 1,
-    exportSchema = false,
-)
-abstract class TransitDatabase : RoomDatabase() {
-    abstract fun stopDao(): StopDao
-    abstract fun routeDao(): RouteDao
-    abstract fun tripDao(): TripDao
-    abstract fun stopTimeDao(): StopTimeDao
-    abstract fun shapeDao(): ShapeDao
-}
-
-// ─── GTFS Static Parser ───────────────────────────────────────────────────────
-
+/**
+ * TransitDb
+ *
+ * Plain SQLite implementation — no Room, no annotation processing,
+ * no identity hash conflicts.
+ *
+ * On first launch, copies the pre-built database from assets to the
+ * app's database directory and opens it directly.
+ */
 @Singleton
-class GtfsStaticParser @Inject constructor(
-    private val db: TransitDatabase,
+class TransitDb @Inject constructor(
+    @ApplicationContext private val context: Context,
 ) {
-    suspend fun parseZip(stream: InputStream) = withContext(Dispatchers.IO) {
-        Timber.i("GTFS: Starting static feed parse")
-        ZipInputStream(stream).use { zip ->
-            var entry = zip.nextEntry
-            while (entry != null) {
-                val bytes = zip.readBytes()
-                when (entry.name) {
-                    "stops.txt"      -> parseStops(bytes.inputStream())
-                    "routes.txt"     -> parseRoutes(bytes.inputStream())
-                    "trips.txt"      -> parseTrips(bytes.inputStream())
-                    "stop_times.txt" -> parseStopTimes(bytes.inputStream())
-                    "shapes.txt"     -> parseShapes(bytes.inputStream())
+    companion object {
+        const val DB_NAME = "transit_prepopulated.db"
+    }
+
+    private val db: SQLiteDatabase by lazy {
+        openOrCopyDatabase()
+    }
+
+    private fun openOrCopyDatabase(): SQLiteDatabase {
+        val dbFile = context.getDatabasePath(DB_NAME)
+        if (!dbFile.exists()) {
+            dbFile.parentFile?.mkdirs()
+            try {
+                context.assets.open(DB_NAME).use { input ->
+                    FileOutputStream(dbFile).use { output ->
+                        input.copyTo(output)
+                    }
                 }
-                zip.closeEntry()
-                entry = zip.nextEntry
+                Timber.i("TransitDb: Copied pre-built database from assets")
+            } catch (e: Exception) {
+                Timber.e(e, "TransitDb: Failed to copy asset database")
             }
         }
-        Timber.i("GTFS: Parse complete — ${db.stopDao().count()} stops loaded")
+        return SQLiteDatabase.openDatabase(
+            dbFile.path,
+            null,
+            SQLiteDatabase.OPEN_READONLY,
+        )
     }
 
-    private suspend fun parseStops(stream: InputStream) {
-        val entities = parseCsv(stream) { row ->
-            StopEntity(
-                stopId = row["stop_id"] ?: return@parseCsv null,
-                stopName = row["stop_name"] ?: "",
-                lat = row["stop_lat"]?.toDoubleOrNull() ?: return@parseCsv null,
-                lng = row["stop_lon"]?.toDoubleOrNull() ?: return@parseCsv null,
-                wheelchairBoarding = row["wheelchair_boarding"]?.toIntOrNull() ?: 0,
-            )
-        }
-        db.stopDao().insertAll(entities)
-    }
+    // ── Stops ─────────────────────────────────────────────────────────────────
 
-    private suspend fun parseRoutes(stream: InputStream) {
-        val entities = parseCsv(stream) { row ->
-            RouteEntity(
-                routeId = row["route_id"] ?: return@parseCsv null,
-                routeShortName = row["route_short_name"] ?: "",
-                routeLongName = row["route_long_name"] ?: "",
-                routeType = row["route_type"]?.toIntOrNull() ?: 3,
-                routeColor = row["route_color"] ?: "FFFFFF",
-                routeTextColor = row["route_text_color"] ?: "000000",
-            )
-        }
-        db.routeDao().insertAll(entities)
-    }
-
-    private suspend fun parseTrips(stream: InputStream) {
-        val entities = parseCsv(stream) { row ->
-            TripEntity(
-                tripId = row["trip_id"] ?: return@parseCsv null,
-                routeId = row["route_id"] ?: return@parseCsv null,
-                serviceId = row["service_id"] ?: "",
-                tripHeadsign = row["trip_headsign"] ?: "",
-                directionId = row["direction_id"]?.toIntOrNull() ?: 0,
-                shapeId = row["shape_id"] ?: "",
-            )
-        }
-        db.tripDao().insertAll(entities)
-    }
-
-    private suspend fun parseStopTimes(stream: InputStream) {
-        val batch = mutableListOf<StopTimeEntity>()
-        parseCsvStreaming(stream) { row ->
-            val entity = StopTimeEntity(
-                tripId = row["trip_id"] ?: return@parseCsvStreaming,
-                stopId = row["stop_id"] ?: return@parseCsvStreaming,
-                stopSequence = row["stop_sequence"]?.toIntOrNull() ?: return@parseCsvStreaming,
-                arrivalTime = row["arrival_time"] ?: "",
-                departureTime = row["departure_time"] ?: "",
-            )
-            batch.add(entity)
-            if (batch.size >= 5000) {
-                db.stopTimeDao().insertAll(batch.toList())
-                batch.clear()
+    suspend fun getStopById(id: String): Stop? = withContext(Dispatchers.IO) {
+        try {
+            db.rawQuery(
+                "SELECT stopId, stopName, lat, lng, wheelchairBoarding FROM stops WHERE stopId = ? LIMIT 1",
+                arrayOf(id)
+            ).use { cursor ->
+                if (cursor.moveToFirst()) cursor.toStop() else null
             }
-        }
-        if (batch.isNotEmpty()) db.stopTimeDao().insertAll(batch)
-    }
-
-    private suspend fun parseShapes(stream: InputStream) {
-        val batch = mutableListOf<ShapeEntity>()
-        parseCsvStreaming(stream) { row ->
-            val entity = ShapeEntity(
-                shapeId = row["shape_id"] ?: return@parseCsvStreaming,
-                lat = row["shape_pt_lat"]?.toDoubleOrNull() ?: return@parseCsvStreaming,
-                lng = row["shape_pt_lon"]?.toDoubleOrNull() ?: return@parseCsvStreaming,
-                sequence = row["shape_pt_sequence"]?.toIntOrNull() ?: return@parseCsvStreaming,
-            )
-            batch.add(entity)
-            if (batch.size >= 5000) {
-                db.shapeDao().insertAll(batch.toList())
-                batch.clear()
-            }
-        }
-        if (batch.isNotEmpty()) db.shapeDao().insertAll(batch)
-    }
-
-    // ── CSV helpers ───────────────────────────────────────────────────────────
-
-    private suspend fun <T> parseCsv(
-        stream: InputStream,
-        mapper: suspend (Map<String, String>) -> T?,
-    ): List<T> {
-        val results = mutableListOf<T>()
-        parseCsvStreaming(stream) { row -> mapper(row)?.let { results.add(it) } }
-        return results
-    }
-
-    private suspend fun parseCsvStreaming(
-        stream: InputStream,
-        onRow: suspend (Map<String, String>) -> Unit,
-    ) {
-        stream.bufferedReader().useLines { lines ->
-            var headers: List<String>? = null
-            for (line in lines) {
-                if (line.isBlank()) continue
-                val values = splitCsv(line)
-                if (headers == null) { headers = values; continue }
-                onRow(headers.zip(values).toMap())
-            }
+        } catch (e: Exception) {
+            Timber.e(e, "TransitDb: getStopById failed")
+            null
         }
     }
 
-    private fun splitCsv(line: String): List<String> {
-        val result = mutableListOf<String>()
-        val current = StringBuilder()
-        var inQuotes = false
-        for (c in line) {
-            when {
-                c == '"' -> inQuotes = !inQuotes
-                c == ',' && !inQuotes -> {
-                    result.add(current.toString().trim())
-                    current.clear()
+    suspend fun getNearbyStops(lat: Double, lng: Double, limit: Int = 20): List<Stop> =
+        withContext(Dispatchers.IO) {
+            try {
+                db.rawQuery(
+                    """
+                    SELECT stopId, stopName, lat, lng, wheelchairBoarding
+                    FROM stops
+                    ORDER BY ((lat - ?) * (lat - ?) + (lng - ?) * (lng - ?))
+                    LIMIT ?
+                    """.trimIndent(),
+                    arrayOf(
+                        lat.toString(), lat.toString(),
+                        lng.toString(), lng.toString(),
+                        limit.toString()
+                    )
+                ).use { cursor ->
+                    val results = mutableListOf<Stop>()
+                    while (cursor.moveToNext()) results.add(cursor.toStop())
+                    results
                 }
-                else -> current.append(c)
+            } catch (e: Exception) {
+                Timber.e(e, "TransitDb: getNearbyStops failed")
+                emptyList()
             }
         }
-        result.add(current.toString().trim())
-        return result
+
+    suspend fun getStopCount(): Int = withContext(Dispatchers.IO) {
+        try {
+            db.rawQuery("SELECT COUNT(*) FROM stops", null).use { cursor ->
+                if (cursor.moveToFirst()) cursor.getInt(0) else 0
+            }
+        } catch (e: Exception) {
+            0
+        }
     }
 
+    // ── Routes ────────────────────────────────────────────────────────────────
+
+    suspend fun getRouteById(id: String): Route? = withContext(Dispatchers.IO) {
+        try {
+            db.rawQuery(
+                "SELECT routeId, routeShortName, routeLongName, routeType, routeColor, routeTextColor FROM routes WHERE routeId = ? LIMIT 1",
+                arrayOf(id)
+            ).use { cursor ->
+                if (cursor.moveToFirst()) cursor.toRoute() else null
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "TransitDb: getRouteById failed")
+            null
+        }
+    }
+
+    suspend fun getAllRoutes(): List<Route> = withContext(Dispatchers.IO) {
+        try {
+            db.rawQuery(
+                "SELECT routeId, routeShortName, routeLongName, routeType, routeColor, routeTextColor FROM routes ORDER BY routeShortName",
+                null
+            ).use { cursor ->
+                val results = mutableListOf<Route>()
+                while (cursor.moveToNext()) results.add(cursor.toRoute())
+                results
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "TransitDb: getAllRoutes failed")
+            emptyList()
+        }
+    }
+
+    fun observeAllRoutes(): Flow<List<Route>> = flow {
+        emit(getAllRoutes())
+    }
+
+    // ── Trips ─────────────────────────────────────────────────────────────────
+
+    suspend fun getTripById(id: String): Trip? = withContext(Dispatchers.IO) {
+        try {
+            db.rawQuery(
+                "SELECT tripId, routeId, serviceId, tripHeadsign, directionId, shapeId FROM trips WHERE tripId = ? LIMIT 1",
+                arrayOf(id)
+            ).use { cursor ->
+                if (cursor.moveToFirst()) cursor.toTrip() else null
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "TransitDb: getTripById failed")
+            null
+        }
+    }
+
+    suspend fun getTripsByRoute(routeId: String): List<Trip> = withContext(Dispatchers.IO) {
+        try {
+            db.rawQuery(
+                "SELECT tripId, routeId, serviceId, tripHeadsign, directionId, shapeId FROM trips WHERE routeId = ?",
+                arrayOf(routeId)
+            ).use { cursor ->
+                val results = mutableListOf<Trip>()
+                while (cursor.moveToNext()) results.add(cursor.toTrip())
+                results
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "TransitDb: getTripsByRoute failed")
+            emptyList()
+        }
+    }
+
+    // ── Stop Times ────────────────────────────────────────────────────────────
+
+    suspend fun getStopTimesForTrip(tripId: String): List<StopTime> =
+        withContext(Dispatchers.IO) {
+            try {
+                db.rawQuery(
+                    "SELECT tripId, stopId, stopSequence, arrivalTime, departureTime FROM stop_times WHERE tripId = ? ORDER BY stopSequence",
+                    arrayOf(tripId)
+                ).use { cursor ->
+                    val results = mutableListOf<StopTime>()
+                    while (cursor.moveToNext()) results.add(cursor.toStopTime())
+                    results
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "TransitDb: getStopTimesForTrip failed")
+                emptyList()
+            }
+        }
+
+    // ── Shapes ────────────────────────────────────────────────────────────────
+
+    suspend fun getShape(shapeId: String): List<ShapePoint> = withContext(Dispatchers.IO) {
+        try {
+            db.rawQuery(
+                "SELECT shapeId, lat, lng, sequence FROM shapes WHERE shapeId = ? ORDER BY sequence",
+                arrayOf(shapeId)
+            ).use { cursor ->
+                val results = mutableListOf<ShapePoint>()
+                while (cursor.moveToNext()) results.add(cursor.toShapePoint())
+                results
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "TransitDb: getShape failed")
+            emptyList()
+        }
+    }
+
+    // ── Cursor extension helpers ───────────────────────────────────────────────
+
+    private fun android.database.Cursor.toStop() = Stop(
+        stopId = getString(0),
+        stopName = getString(1),
+        lat = getDouble(2),
+        lng = getDouble(3),
+        wheelchairBoarding = getInt(4),
+    )
+
+    private fun android.database.Cursor.toRoute() = Route(
+        routeId = getString(0),
+        routeShortName = getString(1),
+        routeLongName = getString(2),
+        routeType = getInt(3),
+        routeColor = getString(4) ?: "FFFFFF",
+        routeTextColor = getString(5) ?: "000000",
+    )
+
+    private fun android.database.Cursor.toTrip() = Trip(
+        tripId = getString(0),
+        routeId = getString(1),
+        serviceId = getString(2),
+        tripHeadsign = getString(3) ?: "",
+        directionId = getInt(4),
+        shapeId = getString(5) ?: "",
+    )
+
+    private fun android.database.Cursor.toStopTime() = StopTime(
+        tripId = getString(0),
+        stopId = getString(1),
+        stopSequence = getInt(2),
+        arrivalTime = getString(3) ?: "",
+        departureTime = getString(4) ?: "",
+    )
+
+    private fun android.database.Cursor.toShapePoint() = ShapePoint(
+        shapeId = getString(0),
+        lat = getDouble(1),
+        lng = getDouble(2),
+        sequence = getInt(3),
+    )
 }
