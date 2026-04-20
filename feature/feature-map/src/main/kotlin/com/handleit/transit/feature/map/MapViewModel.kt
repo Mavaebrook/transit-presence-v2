@@ -3,7 +3,6 @@ package com.handleit.transit.feature.map
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.handleit.transit.common.MapProvider
-import com.handleit.transit.common.TransitConfig
 import com.handleit.transit.data.gtfs.TransitDb
 import com.handleit.transit.data.gtfsrt.GtfsRtClient
 import com.handleit.transit.data.location.LocationModule
@@ -17,7 +16,38 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 import javax.inject.Inject
 
-// ... MapUiState and MapIntent stay the same ...
+// -------------------- UI STATE --------------------
+
+data class MapUiState(
+    val permissionsGranted: Boolean = false,
+    val selectedStop: Stop? = null,
+    val mapProvider: MapProvider = MapProvider.GOOGLE,
+    val availableRoutes: List<Route> = emptyList(),
+    val userLocation: LatLng? = null,
+    val nearbyStops: List<Stop> = emptyList(),
+    val nearbyVehicles: List<Vehicle> = emptyList(),
+    val feedStatus: FeedStatus = FeedStatus.IDLE
+)
+
+// -------------------- INTENTS --------------------
+
+sealed class MapIntent {
+    data class PermissionsGranted(val granted: Boolean) : MapIntent()
+    data class StopSelected(val stop: Stop) : MapIntent()
+    object DismissStop : MapIntent()
+    object ToggleMapProvider : MapIntent()
+}
+
+// -------------------- FEED STATUS --------------------
+
+enum class FeedStatus {
+    IDLE,
+    CONNECTING,
+    LIVE,
+    ERROR
+}
+
+// -------------------- VIEWMODEL --------------------
 
 @HiltViewModel
 class MapViewModel @Inject constructor(
@@ -39,13 +69,21 @@ class MapViewModel @Inject constructor(
                     startRealtimeUpdates()
                 }
             }
-            is MapIntent.StopSelected -> _uiState.update { it.copy(selectedStop = intent.stop) }
-            is MapIntent.DismissStop -> _uiState.update { it.copy(selectedStop = null) }
+
+            is MapIntent.StopSelected -> {
+                _uiState.update { it.copy(selectedStop = intent.stop) }
+            }
+
+            is MapIntent.DismissStop -> {
+                _uiState.update { it.copy(selectedStop = null) }
+            }
+
             MapIntent.ToggleMapProvider -> {
-                val next = if (_uiState.value.mapProvider == MapProvider.GOOGLE) MapProvider.OSM else MapProvider.GOOGLE
+                val next = if (_uiState.value.mapProvider == MapProvider.GOOGLE)
+                    MapProvider.OSM else MapProvider.GOOGLE
+
                 _uiState.update { it.copy(mapProvider = next) }
             }
-            else -> {}
         }
     }
 
@@ -65,25 +103,24 @@ class MapViewModel @Inject constructor(
 
     private fun startLocationTracking() {
         viewModelScope.launch {
-            // FIX: locationFlow is a function, not a property. 
-            // We call it with parens: locationFlow()
             locationModule.locationFlow()
-                .distinctUntilChanged { old, new -> 
-                    old.latLng.lat == new.latLng.lat && old.latLng.lng == new.latLng.lng 
+                .distinctUntilChanged { old, new ->
+                    old.latLng.lat == new.latLng.lat &&
+                    old.latLng.lng == new.latLng.lng
                 }
                 .onEach { snapshot ->
                     _uiState.update { it.copy(userLocation = snapshot.latLng) }
                     updateNearbyStops(snapshot.latLng)
                 }
                 .catch { t -> Timber.e(t, "Location tracking failed") }
-                .collect()
+                .launchIn(this)
         }
     }
 
     private fun updateNearbyStops(latLng: LatLng) {
         viewModelScope.launch(Dispatchers.IO) {
             val stops = try {
-                transitDb.getNearbyStops(latLng.lat, latLng.lng, 1000.0)
+                transitDb.getNearbyStops(latLng.lat, latLng.lng, 1000)
             } catch (t: Throwable) {
                 Timber.e(t, "Nearby query failed")
                 emptyList()
@@ -97,12 +134,20 @@ class MapViewModel @Inject constructor(
             while (true) {
                 try {
                     _uiState.update { it.copy(feedStatus = FeedStatus.CONNECTING) }
+
                     val vehicles = gtfsRtClient.fetchVehiclePositions()
-                    _uiState.update { it.copy(nearbyVehicles = vehicles, feedStatus = FeedStatus.LIVE) }
+
+                    _uiState.update {
+                        it.copy(
+                            nearbyVehicles = vehicles,
+                            feedStatus = FeedStatus.LIVE
+                        )
+                    }
                 } catch (t: Throwable) {
                     Timber.e(t, "GTFS-RT sync failed")
                     _uiState.update { it.copy(feedStatus = FeedStatus.ERROR) }
                 }
+
                 delay(30_000)
             }
         }
