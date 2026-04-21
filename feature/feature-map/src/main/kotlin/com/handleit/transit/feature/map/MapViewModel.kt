@@ -3,14 +3,12 @@ package com.handleit.transit.feature.map
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.handleit.transit.common.MapProvider
-import com.handleit.transit.common.TransitConfig
 import com.handleit.transit.data.gtfs.TransitDb
 import com.handleit.transit.data.gtfsrt.GtfsRtClient
 import com.handleit.transit.data.location.LocationModule
 import com.handleit.transit.model.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -61,15 +59,12 @@ class MapViewModel @Inject constructor(
                     startRealtimeUpdates()
                 }
             }
-
             is MapIntent.StopSelected -> {
                 _uiState.update { it.copy(selectedStop = intent.stop) }
             }
-
             is MapIntent.DismissStop -> {
                 _uiState.update { it.copy(selectedStop = null) }
             }
-
             MapIntent.ToggleMapProvider -> {
                 val next = if (_uiState.value.mapProvider == MapProvider.GOOGLE)
                     MapProvider.OSM else MapProvider.GOOGLE
@@ -121,27 +116,17 @@ class MapViewModel @Inject constructor(
     }
 
     private fun startRealtimeUpdates() {
+        // Collect from the shared GtfsRtClient StateFlows — no independent
+        // polling loop, no duplicate HTTP requests, always in sync with
+        // AppViewModel which reads from the same source
         viewModelScope.launch {
-            while (true) {
-                try {
-                    _uiState.update { it.copy(feedStatus = FeedStatus.CONNECTING) }
-
-                    val vehicles = gtfsRtClient.fetchVehiclePositions(
-                        TransitConfig.GTFS_RT_VEHICLE_POSITIONS_URL
-                    )
-
-                    _uiState.update {
-                        it.copy(
-                            nearbyVehicles = vehicles,
-                            feedStatus = FeedStatus.LIVE
-                        )
-                    }
-                } catch (t: Throwable) {
-                    Timber.e(t, "GTFS-RT sync failed")
-                    _uiState.update { it.copy(feedStatus = FeedStatus.ERROR) }
-                }
-
-                delay(30_000)
+            gtfsRtClient.vehicles.collect { vehicles ->
+                _uiState.update { it.copy(nearbyVehicles = vehicles) }
+            }
+        }
+        viewModelScope.launch {
+            gtfsRtClient.feedStatus.collect { status ->
+                _uiState.update { it.copy(feedStatus = status) }
             }
         }
     }
