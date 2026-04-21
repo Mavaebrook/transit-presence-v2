@@ -6,6 +6,8 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -177,6 +179,7 @@ private fun GoogleMapLayer(
         }
     }
 }
+
 // ---------------- OSM MAP LAYER ----------------
 
 @Composable
@@ -239,6 +242,7 @@ fun StopSelectionCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .fillMaxHeight(0.5f)
             .padding(16.dp),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
@@ -246,23 +250,31 @@ fun StopSelectionCard(
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(stop.stopName, style = MaterialTheme.typography.titleLarge)
+                Text(
+                    text = stop.stopName,
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.weight(1f)
+                )
                 TextButton(onClick = onDismiss) { Text("Close") }
             }
 
+            Spacer(Modifier.height(4.dp))
             Text("Available Routes:", style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(8.dp))
 
-            routes.forEach { route ->
-                OutlinedButton(
-                    onClick = { onRouteSelected(route) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                ) {
-                    Text("Route ${route.shortName}: ${route.longName}")
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                items(items = routes, key = { it.routeId }) { route ->
+                    OutlinedButton(
+                        onClick = { onRouteSelected(route) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                    ) {
+                        Text("Route ${route.shortName}: ${route.longName}")
+                    }
                 }
             }
         }
