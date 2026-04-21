@@ -206,6 +206,22 @@ def build_db(gtfs_bytes):
                     pass
         cursor.executemany("INSERT OR REPLACE INTO shapes VALUES (?, ?, ?, ?)", get_shapes())
 
+    # ---------------- INDEXING (CRITICAL FOR MOBILE PERF) ----------------
+    print("Generating indexes...")
+    cursor.executescript("""
+        -- Speeds up upcoming departures lookup (Slide Menu)
+        CREATE INDEX IF NOT EXISTS idx_stoptimes_stop_id ON stop_times(stopId);
+        
+        -- Speeds up route identification for stops
+        CREATE INDEX IF NOT EXISTS idx_trips_route_id ON trips(routeId);
+        
+        -- Speeds up timeline building
+        CREATE INDEX IF NOT EXISTS idx_stoptimes_trip_id ON stop_times(tripId);
+        
+        -- Speeds up spatial sorting of stops
+        CREATE INDEX IF NOT EXISTS idx_stops_coords ON stops(lat, lng);
+    """)
+
     # ---------------- FINALIZE ----------------
     conn.commit()
     print("Optimizing database...")
