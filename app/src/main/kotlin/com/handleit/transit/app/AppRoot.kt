@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.compose.foundation.layout.size
 import com.handleit.transit.feature.map.ArrivalSheetContent
 import com.handleit.transit.feature.map.MapIntent
 import com.handleit.transit.feature.map.MapScreen
