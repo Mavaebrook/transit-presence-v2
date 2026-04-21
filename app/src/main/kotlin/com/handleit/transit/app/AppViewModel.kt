@@ -134,16 +134,8 @@ class AppViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 gtfsRtClient.vehicles.collect { vehicles ->
-                    val userPos = _state.value.userLocation
-                    val nearby = if (userPos != null) {
-                        vehicles.filter { v ->
-                            locationModule.haversineMeters(userPos, LatLng(v.lat, v.lng)) <=
-                                    TransitConfig.NEARBY_ROUTES_RADIUS_METERS
-                        }.take(TransitConfig.MAX_NEARBY_ROUTES_ON_MAP)
-                    } else {
-                        vehicles.take(TransitConfig.MAX_NEARBY_ROUTES_ON_MAP)
-                    }
-                    _state.update { it.copy(nearbyVehicles = nearby) }
+                    // Pass all vehicles — OsmMapLayer filters by bounding box on render
+                    _state.update { it.copy(nearbyVehicles = vehicles) }
                     updateArrivals()
                 }
             } catch (e: Exception) {
@@ -176,7 +168,6 @@ class AppViewModel @Inject constructor(
                 _state.update { it.copy(routesForSelectedStop = routes) }
             } catch (e: Exception) {
                 Timber.e(e, "loadRoutesForStop failed: ${e.message}")
-                // Fall back to all routes if query fails
                 _state.update { it.copy(routesForSelectedStop = _state.value.availableRoutes) }
             }
         }
@@ -184,7 +175,8 @@ class AppViewModel @Inject constructor(
 
     private suspend fun refreshNearbyStops(pos: LatLng) {
         try {
-            val stops = transitDb.getNearbyStops(pos.lat, pos.lng, limit = 10)
+            // 500 covers entire LYNX service area — bounding box filter trims to viewport
+            val stops = transitDb.getNearbyStops(pos.lat, pos.lng, limit = 500)
             _state.update { it.copy(nearbyStops = stops) }
         } catch (e: Exception) {
             Timber.e(e, "refreshNearbyStops failed: ${e.message}")
