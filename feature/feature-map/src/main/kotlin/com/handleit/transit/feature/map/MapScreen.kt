@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import androidx.compose.animation.AnimatedVisibility
@@ -210,44 +211,46 @@ private fun OsmMapLayer(
                 mapView.controller.animateTo(GeoPoint(it.lat, it.lng))
             }
 
-            // STOPS — small blue dot
-            val stopDotIcon = createDotDrawable(mapView.context, 0xFF2196F3.toInt(), 16)
-            state.nearbyStops.forEach { stop ->
-                val marker = org.osmdroid.views.overlay.Marker(mapView).apply {
-                    position = GeoPoint(stop.lat, stop.lng)
-                    title = stop.stopName
-                    icon = stopDotIcon
-                    setAnchor(
-                        org.osmdroid.views.overlay.Marker.ANCHOR_CENTER,
-                        org.osmdroid.views.overlay.Marker.ANCHOR_CENTER
-                    )
-                    setOnMarkerClickListener { _, _ ->
-                        onStopTapped(stop)
-                        true
-                    }
-                }
-                mapView.overlays.add(marker)
-            }
+            val bounds = mapView.boundingBox
 
-            // VEHICLES — LYNX paw print icon
-            val busIcon = createScaledDrawable(
-                mapView.context,
-                R.drawable.ic_lynx_marker,
-                48
-            )
-            state.nearbyVehicles.forEach { v ->
-                val marker = org.osmdroid.views.overlay.Marker(mapView).apply {
-                    position = GeoPoint(v.lat, v.lng)
-                    title = "Bus ${v.vehicleId}"
-                    icon = busIcon
-                    rotation = -(v.bearing ?: 0f)
-                    setAnchor(
-                        org.osmdroid.views.overlay.Marker.ANCHOR_CENTER,
-                        org.osmdroid.views.overlay.Marker.ANCHOR_BOTTOM
-                    )
+            // STOPS — small blue dot, only within current viewport
+            val stopDotIcon = createDotDrawable(mapView.context, 0xFF2196F3.toInt(), 8)
+            state.nearbyStops
+                .filter { stop -> bounds.contains(GeoPoint(stop.lat, stop.lng)) }
+                .forEach { stop ->
+                    val marker = org.osmdroid.views.overlay.Marker(mapView).apply {
+                        position = GeoPoint(stop.lat, stop.lng)
+                        title = stop.stopName
+                        icon = stopDotIcon
+                        setAnchor(
+                            org.osmdroid.views.overlay.Marker.ANCHOR_CENTER,
+                            org.osmdroid.views.overlay.Marker.ANCHOR_CENTER
+                        )
+                        setOnMarkerClickListener { _, _ ->
+                            onStopTapped(stop)
+                            true
+                        }
+                    }
+                    mapView.overlays.add(marker)
                 }
-                mapView.overlays.add(marker)
-            }
+
+            // VEHICLES — green triangle rotated to direction of travel
+            val triangleIcon = createTriangleDrawable(mapView.context, 0xFF1B5E20.toInt(), 24)
+            state.nearbyVehicles
+                .filter { v -> bounds.contains(GeoPoint(v.lat, v.lng)) }
+                .forEach { v ->
+                    val marker = org.osmdroid.views.overlay.Marker(mapView).apply {
+                        position = GeoPoint(v.lat, v.lng)
+                        title = "Bus ${v.vehicleId}"
+                        icon = triangleIcon
+                        rotation = -(v.bearing ?: 0f)
+                        setAnchor(
+                            org.osmdroid.views.overlay.Marker.ANCHOR_CENTER,
+                            org.osmdroid.views.overlay.Marker.ANCHOR_CENTER
+                        )
+                    }
+                    mapView.overlays.add(marker)
+                }
 
             mapView.invalidate()
         }
@@ -265,6 +268,25 @@ private fun createDotDrawable(context: Context, color: Int, sizeDp: Int): Drawab
         this.color = color
     }
     canvas.drawCircle(sizePx / 2f, sizePx / 2f, sizePx / 2f, paint)
+    return BitmapDrawable(context.resources, bitmap)
+}
+
+private fun createTriangleDrawable(context: Context, color: Int, sizeDp: Int): Drawable {
+    val sizePx = (sizeDp * context.resources.displayMetrics.density).toInt()
+    val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    val paint = Paint().apply {
+        isAntiAlias = true
+        this.color = color
+        style = Paint.Style.FILL
+    }
+    val path = Path().apply {
+        moveTo(sizePx / 2f, 0f)
+        lineTo(sizePx.toFloat(), sizePx.toFloat())
+        lineTo(0f, sizePx.toFloat())
+        close()
+    }
+    canvas.drawPath(path, paint)
     return BitmapDrawable(context.resources, bitmap)
 }
 
