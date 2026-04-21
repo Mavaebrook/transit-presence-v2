@@ -29,10 +29,6 @@ import com.google.maps.android.compose.*
 
 import com.handleit.transit.common.MapProvider
 import com.handleit.transit.model.*
-import com.handleit.transit.model.FeedStatus
-import com.handleit.transit.model.Route
-import com.handleit.transit.model.Stop
-import com.handleit.transit.model.Vehicle
 
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
@@ -172,18 +168,15 @@ private fun GoogleMapLayer(
 
         // VEHICLES
         state.nearbyVehicles.forEach { vehicle ->
-            MarkerComposable(
-                state = MarkerState(GmsLatLng(vehicle.lat, vehicle.lng))
-            ) {
-                BusMarkerIcon(
-                    bearing = vehicle.bearing ?: 0f,
-                    routeId = vehicle.routeId
-                )
-            }
+            Marker(
+                state = MarkerState(GmsLatLng(vehicle.lat, vehicle.lng)),
+                title = "Bus ${vehicle.vehicleId}",
+                rotation = vehicle.bearing ?: 0f,
+                onClick = { true }
+            )
         }
     }
 }
-
 // ---------------- OSM MAP LAYER ----------------
 
 @Composable
@@ -258,14 +251,16 @@ fun StopSelectionCard(
                 Text(stop.stopName, style = MaterialTheme.typography.titleLarge)
                 TextButton(onClick = onDismiss) { Text("Close") }
             }
-            
+
             Text("Available Routes:", style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(8.dp))
-            
+
             routes.forEach { route ->
                 OutlinedButton(
                     onClick = { onRouteSelected(route) },
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
                 ) {
                     Text("Route ${route.shortName}: ${route.longName}")
                 }
@@ -275,7 +270,7 @@ fun StopSelectionCard(
 }
 
 @Composable
-fun BusMarkerIcon(bearing: Float, routeId: String) {
+fun BusMarkerIcon(bearing: Float) {
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
