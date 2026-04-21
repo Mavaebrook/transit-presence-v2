@@ -2,6 +2,7 @@ package com.handleit.transit.app
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -18,7 +19,10 @@ import com.handleit.transit.feature.map.RouteArrival
 import com.handleit.transit.feature.riding.RidingScreen
 import com.handleit.transit.feature.settings.SettingsScreen
 import com.handleit.transit.fsm.RideState
+import com.handleit.transit.model.Route
 import com.handleit.transit.ui.theme.TransitTheme
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 
 object Nav {
     const val MAP      = "map"
@@ -42,24 +46,46 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
                     )
                 )
 
-                // Build arrival list from AppState
-                // Placeholder until getUpcomingDepartures is wired —
-                // shows routes for nearby stops with no ETA yet
-                val arrivals = remember(state.nearbyVehicles, state.nearbyStops) {
-                    state.nearbyVehicles.mapNotNull { vehicle ->
-                        val route = state.availableRoutes
-                            .firstOrNull { it.routeId == vehicle.routeId }
-                            ?: return@mapNotNull null
-                        val stop = state.nearbyStops.firstOrNull()
+                // Convert UpcomingDeparture list from AppState into RouteArrival
+                // for the arrival sheet, computing ETA in minutes from current time
+                val timeFormatter = remember { DateTimeFormatter.ofPattern("HH:mm:ss") }
+                val arrivals = remember(state.upcomingDepartures) {
+                    val now = LocalTime.now()
+                    state.upcomingDepartures.mapNotNull { departure ->
+                        val route = Route(
+                            routeId = departure.routeId,
+                            routeShortName = departure.routeShortName,
+                            routeLongName = departure.routeLongName,
+                            routeType = 3,
+                            routeColor = departure.routeColor,
+                            routeTextColor = departure.routeTextColor,
+                        )
+                        val etaMinutes = try {
+                            val depTime = LocalTime.parse(
+                                // GTFS times can be 25:00:00 etc — clamp to valid range
+                                departure.departureTime.let { t ->
+                                    val parts = t.split(":")
+                                    val h = parts[0].toInt() % 24
+                                    "%02d:%s:%s".format(h, parts[1], parts[2])
+                                },
+                                timeFormatter
+                            )
+                            val diff = java.time.Duration.between(now, depTime).toMinutes()
+                            if (diff < 0) return@mapNotNull null // already departed
+                            diff.toInt()
+                        } catch (e: Exception) {
+                            null
+                        }
                         RouteArrival(
                             route = route,
-                            headsign = route.routeLongName,
-                            nearestStopName = stop?.stopName ?: "",
-                            etaMinutes = null,
+                            headsign = departure.headsign.ifBlank { departure.routeLongName },
+                            nearestStopName = departure.stopName,
+                            etaMinutes = etaMinutes,
                             isRealtime = false,
-                            directionId = 0,
+                            directionId = departure.directionId,
                         )
-                    }.distinctBy { it.route.routeId }
+                    }.distinctBy { "${it.route.routeId}-${it.directionId}" }
+                        .sortedBy { it.etaMinutes ?: Int.MAX_VALUE }
                 }
 
                 BottomSheetScaffold(
@@ -68,12 +94,11 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
                     sheetContainerColor = Color(0xFF1A0A2E),
                     sheetContentColor = Color.White,
                     sheetDragHandle = {
-                        // Drag handle pill
                         Surface(
-                            modifier = androidx.compose.ui.Modifier
+                            modifier = Modifier
                                 .padding(vertical = 8.dp)
                                 .size(width = 36.dp, height = 4.dp),
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(2.dp),
+                            shape = RoundedCornerShape(2.dp),
                             color = Color.White.copy(alpha = 0.3f),
                         ) {}
                     },
