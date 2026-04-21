@@ -23,13 +23,10 @@ class TransitDb @Inject constructor(
 
     private var _db: SQLiteDatabase? = null
 
-    /**
-     * Manual getter to avoid the KSP 'by lazy' delegate error.
-     */
     private fun getDb(): SQLiteDatabase {
         val current = _db
         if (current != null && current.isOpen) return current
-        
+
         return synchronized(this) {
             val secondCheck = _db
             if (secondCheck != null && secondCheck.isOpen) {
@@ -107,6 +104,30 @@ class TransitDb @Inject constructor(
             }
         } catch (e: Exception) {
             Timber.e(e, "TransitDb: getAllRoutes failed")
+            emptyList()
+        }
+    }
+
+    suspend fun getRoutesForStop(stopId: String): List<Route> = withContext(Dispatchers.IO) {
+        try {
+            getDb().rawQuery(
+                """
+                SELECT DISTINCT r.routeId, r.routeShortName, r.routeLongName, 
+                       r.routeType, r.routeColor, r.routeTextColor
+                FROM routes r
+                INNER JOIN trips t ON t.routeId = r.routeId
+                INNER JOIN stop_times st ON st.tripId = t.tripId
+                WHERE st.stopId = ?
+                ORDER BY r.routeShortName
+                """.trimIndent(),
+                arrayOf(stopId)
+            ).use { cursor ->
+                val results = mutableListOf<Route>()
+                while (cursor.moveToNext()) results.add(cursor.toRoute())
+                results
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "TransitDb: getRoutesForStop failed")
             emptyList()
         }
     }
