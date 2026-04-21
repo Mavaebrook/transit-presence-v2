@@ -14,6 +14,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 
 data class AppState(
@@ -64,15 +65,18 @@ class AppViewModel @Inject constructor(
 
     init {
         observeFsmState()
-        observeLocation()
         observeVehicles()
         observeFeedStatus()
-        loadRoutes()
         gtfsRtClient.startPolling()
+        // observeLocation() and loadRoutes() are deferred until permissions granted
     }
 
     fun onPermissionsResult(granted: Boolean) {
         _state.update { it.copy(permissionsGranted = granted) }
+        if (granted) {
+            observeLocation()
+            loadRoutes()
+        }
     }
 
     fun dispatch(intent: AppIntent) {
@@ -118,7 +122,7 @@ class AppViewModel @Inject constructor(
                     checkEtaThresholds()
                 }
             } catch (e: Exception) {
-                timber.log.Timber.e(e, "Location flow error: ${e.message}")
+                Timber.e(e, "Location flow error: ${e.message}")
             }
         }
     }
@@ -136,7 +140,7 @@ class AppViewModel @Inject constructor(
                     updateArrivals()
                 }
             } catch (e: Exception) {
-                timber.log.Timber.e(e, "Vehicles flow error: ${e.message}")
+                Timber.e(e, "Vehicles flow error: ${e.message}")
             }
         }
     }
@@ -153,7 +157,7 @@ class AppViewModel @Inject constructor(
                 val routes = transitDb.getAllRoutes()
                 _state.update { it.copy(availableRoutes = routes) }
             } catch (e: Exception) {
-                timber.log.Timber.e(e, "loadRoutes failed: ${e.message}")
+                Timber.e(e, "loadRoutes failed: ${e.message}")
             }
         }
     }
@@ -163,7 +167,7 @@ class AppViewModel @Inject constructor(
             val stops = transitDb.getNearbyStops(pos.lat, pos.lng, limit = 10)
             _state.update { it.copy(nearbyStops = stops) }
         } catch (e: Exception) {
-            timber.log.Timber.e(e, "refreshNearbyStops failed: ${e.message}")
+            Timber.e(e, "refreshNearbyStops failed: ${e.message}")
         }
     }
 
