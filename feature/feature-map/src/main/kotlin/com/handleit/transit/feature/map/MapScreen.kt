@@ -1,5 +1,11 @@
 package com.handleit.transit.feature.map
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -23,12 +29,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.drawable.BitmapDrawable
-import android.graphics.drawable.Drawable
 import androidx.core.content.ContextCompat
 
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -232,7 +232,7 @@ private fun OsmMapLayer(
             // VEHICLES — LYNX paw print icon
             val busIcon = createScaledDrawable(
                 mapView.context,
-                com.handleit.transit.feature.map.R.drawable.`1776742190815`,
+                R.drawable.ic_lynx_marker,
                 48
             )
             state.nearbyVehicles.forEach { v ->
