@@ -153,12 +153,3 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
         }
     }
 }
-Also update MapScreen.kt — add modifier parameter to the function signature since AppRoot now passes paddingValues in:
-@Composable
-fun MapScreen(
-    state: MapUiState,
-    onIntent: (MapIntent) -> Unit,
-    onRouteSelected: (Route, Stop, Stop?) -> Unit,
-    modifier: Modifier = Modifier,  // ← add this
-) {
-    Box(modifier = modifier.fillMaxSize()) {  // ← use it here
