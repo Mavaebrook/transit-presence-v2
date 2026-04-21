@@ -23,6 +23,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
+import androidx.core.content.ContextCompat
 
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
@@ -156,7 +163,6 @@ private fun GoogleMapLayer(
         properties = MapProperties(isMyLocationEnabled = state.permissionsGranted),
         uiSettings = MapUiSettings(myLocationButtonEnabled = true)
     ) {
-        // STOPS
         state.nearbyStops.forEach { stop ->
             Marker(
                 state = MarkerState(GmsLatLng(stop.lat, stop.lng)),
@@ -168,7 +174,6 @@ private fun GoogleMapLayer(
             )
         }
 
-        // VEHICLES
         state.nearbyVehicles.forEach { vehicle ->
             Marker(
                 state = MarkerState(GmsLatLng(vehicle.lat, vehicle.lng)),
@@ -205,10 +210,17 @@ private fun OsmMapLayer(
                 mapView.controller.animateTo(GeoPoint(it.lat, it.lng))
             }
 
+            // STOPS — small blue dot
+            val stopDotIcon = createDotDrawable(mapView.context, 0xFF2196F3.toInt(), 16)
             state.nearbyStops.forEach { stop ->
                 val marker = org.osmdroid.views.overlay.Marker(mapView).apply {
                     position = GeoPoint(stop.lat, stop.lng)
                     title = stop.stopName
+                    icon = stopDotIcon
+                    setAnchor(
+                        org.osmdroid.views.overlay.Marker.ANCHOR_CENTER,
+                        org.osmdroid.views.overlay.Marker.ANCHOR_CENTER
+                    )
                     setOnMarkerClickListener { _, _ ->
                         onStopTapped(stop)
                         true
@@ -217,17 +229,53 @@ private fun OsmMapLayer(
                 mapView.overlays.add(marker)
             }
 
+            // VEHICLES — LYNX paw print icon
+            val busIcon = createScaledDrawable(
+                mapView.context,
+                com.handleit.transit.feature.map.R.drawable.`1776742190815`,
+                48
+            )
             state.nearbyVehicles.forEach { v ->
                 val marker = org.osmdroid.views.overlay.Marker(mapView).apply {
                     position = GeoPoint(v.lat, v.lng)
                     title = "Bus ${v.vehicleId}"
+                    icon = busIcon
                     rotation = -(v.bearing ?: 0f)
+                    setAnchor(
+                        org.osmdroid.views.overlay.Marker.ANCHOR_CENTER,
+                        org.osmdroid.views.overlay.Marker.ANCHOR_BOTTOM
+                    )
                 }
                 mapView.overlays.add(marker)
             }
+
             mapView.invalidate()
         }
     )
+}
+
+// ---------------- DRAWABLE HELPERS ----------------
+
+private fun createDotDrawable(context: Context, color: Int, sizeDp: Int): Drawable {
+    val sizePx = (sizeDp * context.resources.displayMetrics.density).toInt()
+    val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    val paint = Paint().apply {
+        isAntiAlias = true
+        this.color = color
+    }
+    canvas.drawCircle(sizePx / 2f, sizePx / 2f, sizePx / 2f, paint)
+    return BitmapDrawable(context.resources, bitmap)
+}
+
+private fun createScaledDrawable(context: Context, resId: Int, sizeDp: Int): Drawable {
+    val sizePx = (sizeDp * context.resources.displayMetrics.density).toInt()
+    val original = ContextCompat.getDrawable(context, resId) ?: return BitmapDrawable()
+    val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    original.setBounds(0, 0, sizePx, sizePx)
+    original.draw(canvas)
+    return BitmapDrawable(context.resources, bitmap)
 }
 
 // ---------------- UI HELPERS & COMPONENTS ----------------
