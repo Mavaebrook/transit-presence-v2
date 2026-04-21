@@ -24,7 +24,28 @@ data class Route(
     val routeColor: String = "FFFFFF",
     val routeTextColor: String = "000000",
 )
+data class UpcomingDeparture(
+    val routeId: String,
+    val routeShortName: String,
+    val routeLongName: String,
+    val routeColor: String,
+    val routeTextColor: String,
+    val headsign: String,
+    val directionId: Int,
+    val departureTime: String,  // "HH:MM:SS"
+    val stopSequence: Int,
+    val stopName: String,
+)
 
+data class TripStop(
+    val stopId: String,
+    val stopName: String,
+    val lat: Double,
+    val lng: Double,
+    val arrivalTime: String,    // "HH:MM:SS"
+    val departureTime: String,  // "HH:MM:SS"
+    val stopSequence: Int,
+)
 // Extension properties to help MapScreen.kt which expects 'shortName' and 'longName'
 val Route.shortName: String get() = routeShortName
 val Route.longName: String get() = routeLongName
