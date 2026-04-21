@@ -52,8 +52,9 @@ fun MapScreen(
     state: MapUiState,
     onIntent: (MapIntent) -> Unit,
     onRouteSelected: (Route, Stop, Stop?) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = modifier.fillMaxSize()) {
 
         when (state.mapProvider) {
             MapProvider.GOOGLE -> GoogleMapLayer(
@@ -114,7 +115,7 @@ fun MapScreen(
             }
         }
 
-        // ---------------- BOTTOM SHEET ----------------
+        // ---------------- STOP SELECTION CARD ----------------
         AnimatedVisibility(
             visible = state.selectedStop != null,
             enter = slideInVertically { it },
