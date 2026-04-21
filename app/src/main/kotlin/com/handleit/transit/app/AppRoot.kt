@@ -42,10 +42,11 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
             composable(Nav.MAP) {
                 val scaffoldState = rememberBottomSheetScaffoldState(
                     bottomSheetState = rememberStandardBottomSheetState(
-                        initialValue = SheetValue.PartiallyExpanded,
-                        skipHideable = true,
-                    )
-                )
+                    initialValue = SheetValue.PartiallyExpanded,
+                    confirmValueChange = { it != SheetValue.Hidden } // This replaces skipHideable logic
+    )
+)
+                
 
                 // Convert UpcomingDeparture list from AppState into RouteArrival
                 // for the arrival sheet, computing ETA in minutes from current time
