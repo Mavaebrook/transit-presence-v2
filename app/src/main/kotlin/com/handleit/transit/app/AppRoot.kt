@@ -36,13 +36,13 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
                 composable(Nav.MAP) {
                     MapScreen(
                         state = MapUiState(
-                            userLocation     = state.userLocation,
-                            nearbyStops      = state.nearbyStops,
-                            nearbyVehicles   = state.nearbyVehicles,
-                            selectedStop     = state.selectedStop,
-                            availableRoutes  = state.availableRoutes,
-                            mapProvider      = state.mapProvider,
-                            feedStatus       = state.feedStatus,
+                            userLocation       = state.userLocation,
+                            nearbyStops        = state.nearbyStops,
+                            nearbyVehicles     = state.nearbyVehicles,
+                            selectedStop       = state.selectedStop,
+                            availableRoutes    = state.routesForSelectedStop,
+                            mapProvider        = state.mapProvider,
+                            feedStatus         = state.feedStatus,
                             permissionsGranted = state.permissionsGranted,
                         ),
                         onIntent = { intent ->
@@ -68,14 +68,14 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
                         navController.popBackStack()
                     } else {
                         RidingScreen(
-                            state            = state.rideState,
+                            state             = state.rideState,
                             onConfirmBoarding = { onIntent(AppIntent.ConfirmBoarding) },
-                            onConfirmExit    = { onIntent(AppIntent.ConfirmExit) },
-                            onDismissTrip    = {
+                            onConfirmExit     = { onIntent(AppIntent.ConfirmExit) },
+                            onDismissTrip     = {
                                 onIntent(AppIntent.DismissTrip)
                                 navController.popBackStack()
                             },
-                            onReset          = {
+                            onReset           = {
                                 onIntent(AppIntent.Reset)
                                 navController.popBackStack()
                             },
