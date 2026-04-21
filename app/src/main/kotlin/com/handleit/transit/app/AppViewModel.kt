@@ -15,6 +15,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
 data class AppState(
@@ -24,6 +26,7 @@ data class AppState(
     val nearbyVehicles: List<VehiclePosition> = emptyList(),
     val availableRoutes: List<Route> = emptyList(),
     val routesForSelectedStop: List<Route> = emptyList(),
+    val upcomingDepartures: List<UpcomingDeparture> = emptyList(),
     val feedStatus: FeedStatus = FeedStatus.IDLE,
     val mapProvider: MapProvider = TransitConfig.MAP_PROVIDER_DEFAULT,
     val permissionsGranted: Boolean = false,
@@ -63,6 +66,8 @@ class AppViewModel @Inject constructor(
         if (transitionLogs.size > 100) transitionLogs.removeAt(0)
         _state.update { it.copy(transitionLog = transitionLogs.toList()) }
     })
+
+    private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
 
     init {
         observeFsmState()
@@ -134,7 +139,6 @@ class AppViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 gtfsRtClient.vehicles.collect { vehicles ->
-                    // Pass all vehicles — OsmMapLayer filters by bounding box on render
                     _state.update { it.copy(nearbyVehicles = vehicles) }
                     updateArrivals()
                 }
@@ -175,11 +179,29 @@ class AppViewModel @Inject constructor(
 
     private suspend fun refreshNearbyStops(pos: LatLng) {
         try {
-            // 500 covers entire LYNX service area — bounding box filter trims to viewport
             val stops = transitDb.getNearbyStops(pos.lat, pos.lng, limit = 500)
             _state.update { it.copy(nearbyStops = stops) }
+            // Refresh departures whenever location updates
+            loadUpcomingDepartures(stops.firstOrNull())
         } catch (e: Exception) {
             Timber.e(e, "refreshNearbyStops failed: ${e.message}")
+        }
+    }
+
+    private fun loadUpcomingDepartures(nearestStop: Stop?) {
+        if (nearestStop == null) return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val now = LocalTime.now().format(timeFormatter)
+                val departures = transitDb.getUpcomingDepartures(
+                    stopId = nearestStop.stopId,
+                    afterTime = now,
+                    limit = 20,
+                )
+                _state.update { it.copy(upcomingDepartures = departures) }
+            } catch (e: Exception) {
+                Timber.e(e, "loadUpcomingDepartures failed: ${e.message}")
+            }
         }
     }
 
