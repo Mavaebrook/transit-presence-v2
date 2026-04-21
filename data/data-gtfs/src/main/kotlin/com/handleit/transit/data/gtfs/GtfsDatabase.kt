@@ -163,6 +163,123 @@ class TransitDb @Inject constructor(
         }
     }
 
+    // ── Departures ────────────────────────────────────────────────────────────
+
+    /**
+     * Returns upcoming departures from a stop after [afterTime].
+     * [afterTime] format: "HH:MM:SS" — pass current time of day.
+     * GTFS times can exceed 24:00:00 for overnight trips so string
+     * comparison works correctly as-is.
+     * [limit] controls max results per direction.
+     */
+    suspend fun getUpcomingDepartures(
+        stopId: String,
+        afterTime: String,
+        limit: Int = 5,
+    ): List<UpcomingDeparture> = withContext(Dispatchers.IO) {
+        try {
+            getDb().rawQuery(
+                """
+                SELECT
+                    r.routeId,
+                    r.routeShortName,
+                    r.routeLongName,
+                    r.routeColor,
+                    r.routeTextColor,
+                    t.tripHeadsign,
+                    t.directionId,
+                    st.departureTime,
+                    st.stopSequence,
+                    s.stopName
+                FROM stop_times st
+                INNER JOIN trips t ON t.tripId = st.tripId
+                INNER JOIN routes r ON r.routeId = t.routeId
+                INNER JOIN stops s ON s.stopId = st.stopId
+                WHERE st.stopId = ?
+                AND st.departureTime >= ?
+                ORDER BY st.departureTime ASC
+                LIMIT ?
+                """.trimIndent(),
+                arrayOf(stopId, afterTime, limit.toString())
+            ).use { cursor ->
+                val results = mutableListOf<UpcomingDeparture>()
+                while (cursor.moveToNext()) {
+                    results.add(
+                        UpcomingDeparture(
+                            routeId = cursor.getString(0),
+                            routeShortName = cursor.getString(1),
+                            routeLongName = cursor.getString(2),
+                            routeColor = cursor.getString(3) ?: "FFFFFF",
+                            routeTextColor = cursor.getString(4) ?: "000000",
+                            headsign = cursor.getString(5) ?: "",
+                            directionId = cursor.getInt(6),
+                            departureTime = cursor.getString(7),
+                            stopSequence = cursor.getInt(8),
+                            stopName = cursor.getString(9),
+                        )
+                    )
+                }
+                results
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "TransitDb: getUpcomingDepartures failed")
+            emptyList()
+        }
+    }
+
+    /**
+     * Returns all stops for a given trip in sequence order.
+     * Used to build the timeline screen.
+     */
+    suspend fun getStopsForTrip(
+        routeId: String,
+        directionId: Int,
+        afterStopSequence: Int = 0,
+    ): List<TripStop> = withContext(Dispatchers.IO) {
+        try {
+            getDb().rawQuery(
+                """
+                SELECT
+                    s.stopId,
+                    s.stopName,
+                    s.lat,
+                    s.lng,
+                    st.arrivalTime,
+                    st.departureTime,
+                    st.stopSequence
+                FROM stop_times st
+                INNER JOIN trips t ON t.tripId = st.tripId
+                INNER JOIN stops s ON s.stopId = st.stopId
+                WHERE t.routeId = ?
+                AND t.directionId = ?
+                AND st.stopSequence > ?
+                ORDER BY st.stopSequence ASC
+                LIMIT 50
+                """.trimIndent(),
+                arrayOf(routeId, directionId.toString(), afterStopSequence.toString())
+            ).use { cursor ->
+                val results = mutableListOf<TripStop>()
+                while (cursor.moveToNext()) {
+                    results.add(
+                        TripStop(
+                            stopId = cursor.getString(0),
+                            stopName = cursor.getString(1),
+                            lat = cursor.getDouble(2),
+                            lng = cursor.getDouble(3),
+                            arrivalTime = cursor.getString(4),
+                            departureTime = cursor.getString(5),
+                            stopSequence = cursor.getInt(6),
+                        )
+                    )
+                }
+                results
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "TransitDb: getStopsForTrip failed")
+            emptyList()
+        }
+    }
+
     fun observeAllRoutes(): Flow<List<Route>> = flow {
         emit(getAllRoutes())
     }
