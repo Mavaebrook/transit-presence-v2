@@ -90,6 +90,37 @@ class TransitDb @Inject constructor(
             }
         }
 
+    suspend fun getStopsInBounds(
+        minLat: Double,
+        maxLat: Double,
+        minLng: Double,
+        maxLng: Double
+    ): List<Stop> = withContext(Dispatchers.IO) {
+        try {
+            getDb().rawQuery(
+                """
+                SELECT stopId, stopName, lat, lng, wheelchairBoarding
+                FROM stops
+                WHERE lat BETWEEN ? AND ?
+                AND lng BETWEEN ? AND ?
+                """.trimIndent(),
+                arrayOf(
+                    minLat.toString(),
+                    maxLat.toString(),
+                    minLng.toString(),
+                    maxLng.toString()
+                )
+            ).use { cursor ->
+                val results = mutableListOf<Stop>()
+                while (cursor.moveToNext()) results.add(cursor.toStop())
+                results
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "TransitDb: getStopsInBounds failed")
+            emptyList()
+        }
+    }
+
     // ── Routes ────────────────────────────────────────────────────────────────
 
     suspend fun getAllRoutes(): List<Route> = withContext(Dispatchers.IO) {
@@ -112,7 +143,7 @@ class TransitDb @Inject constructor(
         try {
             getDb().rawQuery(
                 """
-                SELECT DISTINCT r.routeId, r.routeShortName, r.routeLongName, 
+                SELECT DISTINCT r.routeId, r.routeShortName, r.routeLongName,
                        r.routeType, r.routeColor, r.routeTextColor
                 FROM routes r
                 INNER JOIN trips t ON t.routeId = r.routeId
