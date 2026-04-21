@@ -23,6 +23,7 @@ data class AppState(
     val nearbyStops: List<Stop> = emptyList(),
     val nearbyVehicles: List<VehiclePosition> = emptyList(),
     val availableRoutes: List<Route> = emptyList(),
+    val routesForSelectedStop: List<Route> = emptyList(),
     val feedStatus: FeedStatus = FeedStatus.IDLE,
     val mapProvider: MapProvider = TransitConfig.MAP_PROVIDER_DEFAULT,
     val permissionsGranted: Boolean = false,
@@ -68,7 +69,6 @@ class AppViewModel @Inject constructor(
         observeVehicles()
         observeFeedStatus()
         gtfsRtClient.startPolling()
-        // observeLocation() and loadRoutes() are deferred until permissions granted
     }
 
     fun onPermissionsResult(granted: Boolean) {
@@ -100,8 +100,11 @@ class AppViewModel @Inject constructor(
                             MapProvider.OSM else MapProvider.GOOGLE
                     )
                 }
-            is AppIntent.StopSelected ->
+            is AppIntent.StopSelected -> {
                 _state.update { it.copy(selectedStop = intent.stop) }
+                intent.stop?.let { stop -> loadRoutesForStop(stop) }
+                    ?: _state.update { it.copy(routesForSelectedStop = emptyList()) }
+            }
         }
     }
 
@@ -131,11 +134,15 @@ class AppViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 gtfsRtClient.vehicles.collect { vehicles ->
-                    val userPos = _state.value.userLocation ?: return@collect
-                    val nearby = vehicles.filter { v ->
-                        locationModule.haversineMeters(userPos, LatLng(v.lat, v.lng)) <=
-                                TransitConfig.NEARBY_ROUTES_RADIUS_METERS
-                    }.take(TransitConfig.MAX_NEARBY_ROUTES_ON_MAP)
+                    val userPos = _state.value.userLocation
+                    val nearby = if (userPos != null) {
+                        vehicles.filter { v ->
+                            locationModule.haversineMeters(userPos, LatLng(v.lat, v.lng)) <=
+                                    TransitConfig.NEARBY_ROUTES_RADIUS_METERS
+                        }.take(TransitConfig.MAX_NEARBY_ROUTES_ON_MAP)
+                    } else {
+                        vehicles.take(TransitConfig.MAX_NEARBY_ROUTES_ON_MAP)
+                    }
                     _state.update { it.copy(nearbyVehicles = nearby) }
                     updateArrivals()
                 }
@@ -158,6 +165,19 @@ class AppViewModel @Inject constructor(
                 _state.update { it.copy(availableRoutes = routes) }
             } catch (e: Exception) {
                 Timber.e(e, "loadRoutes failed: ${e.message}")
+            }
+        }
+    }
+
+    private fun loadRoutesForStop(stop: Stop) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val routes = transitDb.getRoutesForStop(stop.stopId)
+                _state.update { it.copy(routesForSelectedStop = routes) }
+            } catch (e: Exception) {
+                Timber.e(e, "loadRoutesForStop failed: ${e.message}")
+                // Fall back to all routes if query fails
+                _state.update { it.copy(routesForSelectedStop = _state.value.availableRoutes) }
             }
         }
     }
