@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -24,9 +25,10 @@ data class RouteArrival(
     val route: Route,
     val headsign: String,
     val nearestStopName: String,
-    val etaMinutes: Int?,       // null = scheduled only, no live data yet
+    val etaMinutes: Int?,       // null = scheduled only
     val isRealtime: Boolean,
     val directionId: Int,       // 0 = outbound, 1 = inbound
+    val scheduledTime: String = "" // Added for unique key identification
 )
 
 // ─── Search Bar ──────────────────────────────────────────────────────────────
@@ -93,7 +95,6 @@ fun RouteArrivalCard(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Route number badge
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
@@ -111,7 +112,6 @@ fun RouteArrivalCard(
 
             Spacer(Modifier.width(14.dp))
 
-            // Headsign + stop name
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = arrival.headsign,
@@ -131,11 +131,10 @@ fun RouteArrivalCard(
 
             Spacer(Modifier.width(8.dp))
 
-            // ETA
             Column(horizontalAlignment = Alignment.End) {
                 if (arrival.etaMinutes != null) {
                     Text(
-                        text = if (arrival.etaMinutes == 0) "NOW" else "${arrival.etaMinutes}",
+                        text = if (arrival.etaMinutes <= 0) "NOW" else "${arrival.etaMinutes}",
                         color = if (arrival.isRealtime) Color(0xFF69F0AE) else Color.White,
                         fontSize = 28.sp,
                         fontWeight = FontWeight.ExtraBold,
@@ -146,14 +145,6 @@ fun RouteArrivalCard(
                             text = "min",
                             color = Color.White.copy(alpha = 0.6f),
                             fontSize = 11.sp,
-                        )
-                    }
-                    if (arrival.isRealtime) {
-                        Icon(
-                            imageVector = Icons.Default.Search, // swap for wifi icon
-                            contentDescription = "Live",
-                            tint = Color(0xFF69F0AE),
-                            modifier = Modifier.size(12.dp)
                         )
                     }
                 } else {
@@ -175,39 +166,67 @@ fun RouteArrivalCard(
 fun ArrivalSheetContent(
     arrivals: List<RouteArrival>,
     onRouteClicked: (RouteArrival) -> Unit,
+    isLoading: Boolean = false,
+    errorMessage: String? = null
 ) {
-    // Search bar — sticky at top, always visible
-    ArrivalSearchBar()
+    Column(modifier = Modifier.fillMaxWidth()) {
+        ArrivalSearchBar()
 
-    HorizontalDivider(
-        color = Color.White.copy(alpha = 0.08f),
-        thickness = 1.dp,
-    )
+        HorizontalDivider(
+            color = Color.White.copy(alpha = 0.08f),
+            thickness = 1.dp,
+        )
 
-    if (arrivals.isEmpty()) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(120.dp),
-            contentAlignment = Alignment.Center,
+                .heightIn(min = 120.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = "Finding nearby routes...",
-                color = Color.White.copy(alpha = 0.4f),
-                fontSize = 14.sp,
-            )
-        }
-    } else {
-        LazyColumn {
-            items(items = arrivals, key = { "${it.route.routeId}-${it.directionId}" }) { arrival ->
-                RouteArrivalCard(
-                    arrival = arrival,
-                    onClick = { onRouteClicked(arrival) }
-                )
-                HorizontalDivider(
-                    color = Color.White.copy(alpha = 0.05f),
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
+            when {
+                isLoading -> {
+                    CircularProgressIndicator(
+                        color = Color(0xFF69F0AE),
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
+                errorMessage != null -> {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.Warning, contentDescription = null, tint = Color.Red)
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = errorMessage,
+                            color = Color.White.copy(alpha = 0.7f),
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(horizontal = 24.dp)
+                        )
+                    }
+                }
+                arrivals.isEmpty() -> {
+                    Text(
+                        text = "No upcoming buses for this stop.",
+                        color = Color.White.copy(alpha = 0.4f),
+                        fontSize = 14.sp,
+                    )
+                }
+                else -> {
+                    LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                        items(
+                            items = arrivals,
+                            // Key combines route, direction, and time to ensure uniqueness
+                            key = { "${it.route.routeId}-${it.directionId}-${it.scheduledTime}" }
+                        ) { arrival ->
+                            RouteArrivalCard(
+                                arrival = arrival,
+                                onClick = { onRouteClicked(arrival) }
+                            )
+                            HorizontalDivider(
+                                color = Color.White.copy(alpha = 0.05f),
+                                modifier = Modifier.padding(horizontal = 12.dp),
+                            )
+                        }
+                    }
+                }
             }
         }
     }
