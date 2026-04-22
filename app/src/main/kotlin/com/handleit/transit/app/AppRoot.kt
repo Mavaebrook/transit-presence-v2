@@ -1,19 +1,26 @@
 package com.handleit.transit.app
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.handleit.transit.feature.debug.DebugScreen
 import com.handleit.transit.feature.map.ArrivalSheetContent
 import com.handleit.transit.feature.map.MapIntent
 import com.handleit.transit.feature.map.MapScreen
@@ -21,7 +28,10 @@ import com.handleit.transit.feature.map.MapUiState
 import com.handleit.transit.feature.riding.RidingScreen
 import com.handleit.transit.feature.settings.SettingsScreen
 import com.handleit.transit.fsm.RideState
+import com.handleit.transit.model.UpcomingDeparture
 import com.handleit.transit.ui.theme.TransitTheme
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 
 object Nav {
     const val MAP      = "map"
