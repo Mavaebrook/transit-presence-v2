@@ -35,6 +35,7 @@ data class UpcomingDeparture(
     val departureTime: String,  // "HH:MM:SS"
     val stopSequence: Int,
     val stopName: String,
+    val stopId: String?
 )
 
 data class TripStop(
