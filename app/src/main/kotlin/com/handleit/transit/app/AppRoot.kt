@@ -22,6 +22,8 @@ import com.handleit.transit.feature.riding.RidingScreen
 import com.handleit.transit.feature.settings.SettingsScreen
 import com.handleit.transit.fsm.RideState
 import com.handleit.transit.ui.theme.TransitTheme
+import com.handleit.transit.feature.debug.DebugScreen
+
 
 object Nav {
     const val MAP      = "map"
