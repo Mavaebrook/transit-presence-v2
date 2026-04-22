@@ -236,7 +236,6 @@ class TransitDb @Inject constructor(
                             departureTime = cursor.getString(7),
                             stopSequence = cursor.getInt(8),
                             stopName = cursor.getString(9),
-                            stopId = cursor.getString(10) // ✅ FIX
                         )
                     )
                 }
