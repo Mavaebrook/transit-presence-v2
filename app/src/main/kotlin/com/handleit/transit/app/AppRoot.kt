@@ -1,297 +1,138 @@
 package com.handleit.transit.app
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
-import com.handleit.transit.common.MapProvider
-import com.handleit.transit.common.TransitConfig
-import com.handleit.transit.data.gtfs.TransitDb
-import com.handleit.transit.data.gtfsrt.GtfsRtClient
-import com.handleit.transit.data.location.LocationModule
-import com.handleit.transit.data.location.SensorFusionEngine
-import com.handleit.transit.feature.map.RouteArrival
-import com.handleit.transit.fsm.*
-import com.handleit.transit.model.*
-import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
-import timber.log.Timber
-import java.time.LocalTime
-import java.time.format.DateTimeFormatter
-import java.time.Duration
-import javax.inject.Inject
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.compose.foundation.layout.size
+import com.handleit.transit.feature.map.ArrivalSheetContent
+import com.handleit.transit.feature.map.MapIntent
+import com.handleit.transit.feature.map.MapScreen
+import com.handleit.transit.feature.map.MapUiState
+import com.handleit.transit.feature.riding.RidingScreen
+import com.handleit.transit.feature.settings.SettingsScreen
+import com.handleit.transit.fsm.RideState
+import com.handleit.transit.ui.theme.TransitTheme
 
-data class AppState(
-    val rideState: RideState = RideState.Idle,
-    val userLocation: LatLng? = null,
-    val nearbyStops: List<Stop> = emptyList(),
-    val nearbyVehicles: List<VehiclePosition> = emptyList(),
-    val availableRoutes: List<Route> = emptyList(),
-    val routesForSelectedStop: List<Route> = emptyList(),
-    val upcomingDepartures: List<UpcomingDeparture> = emptyList(),
-    val arrivalsForUI: List<RouteArrival> = emptyList(), // Added for UI mapping
-    val isLoadingDepartures: Boolean = false,           // Added for UI state
-    val departureErrorMessage: String? = null,          // Added for UI state
-    val feedStatus: FeedStatus = FeedStatus.IDLE,
-    val mapProvider: MapProvider = TransitConfig.MAP_PROVIDER_DEFAULT,
-    val permissionsGranted: Boolean = false,
-    val transitionLog: List<TransitionLog> = emptyList(),
-    val selectedStop: Stop? = null,
-)
-
-sealed class AppIntent {
-    data class RouteSelected(
-        val route: Route,
-        val stop: Stop,
-        val destination: Stop?,
-    ) : AppIntent()
-    object ConfirmBoarding : AppIntent()
-    object ConfirmExit : AppIntent()
-    object DismissTrip : AppIntent()
-    object Reset : AppIntent()
-    object ToggleMapProvider : AppIntent()
-    data class StopSelected(val stop: Stop?) : AppIntent()
+object Nav {
+    const val MAP      = "map"
+    const val RIDING   = "riding"
+    const val SETTINGS = "settings"
 }
 
-@HiltViewModel
-class AppViewModel @Inject constructor(
-    private val locationModule: LocationModule,
-    private val fusionEngine: SensorFusionEngine,
-    private val gtfsRtClient: GtfsRtClient,
-    private val transitDb: TransitDb,
-) : ViewModel() {
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
+    TransitTheme {
+        val navController = rememberNavController()
 
-    private val transitionLogs = mutableListOf<TransitionLog>()
+        NavHost(navController = navController, startDestination = Nav.MAP) {
 
-    private val _state = MutableStateFlow(AppState())
-    val state: StateFlow<AppState> = _state.asStateFlow()
-
-    private val fsmEngine = RideFsmEngine(onTransition = { log ->
-        transitionLogs.add(log)
-        if (transitionLogs.size > 100) transitionLogs.removeAt(0)
-        _state.update { it.copy(transitionLog = transitionLogs.toList()) }
-    })
-
-    private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
-
-    init {
-        observeFsmState()
-        observeVehicles()
-        observeFeedStatus()
-        gtfsRtClient.startPolling()
-    }
-
-    fun onPermissionsResult(granted: Boolean) {
-        _state.update { it.copy(permissionsGranted = granted) }
-        if (granted) {
-            observeLocation()
-            loadRoutes()
-        }
-    }
-
-    fun dispatch(intent: AppIntent) {
-        when (intent) {
-            is AppIntent.RouteSelected ->
-                fsmEngine.process(
-                    RideEvent.RouteSelected(intent.route, intent.stop, intent.destination)
-                )
-            is AppIntent.ConfirmBoarding ->
-                fsmEngine.process(RideEvent.BoardingConfirmed)
-            is AppIntent.ConfirmExit ->
-                fsmEngine.process(RideEvent.ExitConfirmed)
-            is AppIntent.DismissTrip ->
-                fsmEngine.process(RideEvent.TripDismissed)
-            is AppIntent.Reset ->
-                fsmEngine.process(RideEvent.Reset)
-            is AppIntent.ToggleMapProvider ->
-                _state.update {
-                    it.copy(
-                        mapProvider = if (it.mapProvider == MapProvider.GOOGLE)
-                            MapProvider.OSM else MapProvider.GOOGLE
+            composable(Nav.MAP) {
+                val scaffoldState = rememberBottomSheetScaffoldState(
+                    bottomSheetState = rememberStandardBottomSheetState(
+                        initialValue = SheetValue.PartiallyExpanded,
+                        skipHideable = true,
                     )
-                }
-            is AppIntent.StopSelected -> {
-                _state.update { it.copy(selectedStop = intent.stop) }
-                intent.stop?.let { stop -> loadRoutesForStop(stop) }
-                    ?: _state.update { it.copy(routesForSelectedStop = emptyList()) }
-            }
-        }
-    }
-
-    private fun observeFsmState() {
-        fsmEngine.state
-            .onEach { rideState -> _state.update { it.copy(rideState = rideState) } }
-            .launchIn(viewModelScope)
-    }
-
-    private fun observeLocation() {
-        viewModelScope.launch {
-            try {
-                locationModule.locationFlow().collect { snapshot ->
-                    _state.update { it.copy(userLocation = snapshot.latLng) }
-                    fsmEngine.process(RideEvent.LocationUpdated(snapshot))
-                    refreshNearbyStops(snapshot.latLng)
-                    runFusionIfNeeded(snapshot)
-                    checkEtaThresholds()
-                }
-            } catch (e: Exception) {
-                Timber.e(e, "Location flow error: ${e.message}")
-            }
-        }
-    }
-
-    private fun observeVehicles() {
-        viewModelScope.launch {
-            try {
-                gtfsRtClient.vehicles.collect { vehicles ->
-                    _state.update { it.copy(nearbyVehicles = vehicles) }
-                    updateArrivals()
-                }
-            } catch (e: Exception) {
-                Timber.e(e, "Vehicles flow error: ${e.message}")
-            }
-        }
-    }
-
-    private fun observeFeedStatus() {
-        gtfsRtClient.feedStatus
-            .onEach { status -> _state.update { it.copy(feedStatus = status) } }
-            .launchIn(viewModelScope)
-    }
-
-    private fun loadRoutes() {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val routes = transitDb.getAllRoutes()
-                _state.update { it.copy(availableRoutes = routes) }
-            } catch (e: Exception) {
-                Timber.e(e, "loadRoutes failed: ${e.message}")
-            }
-        }
-    }
-
-    private fun loadRoutesForStop(stop: Stop) {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val routes = transitDb.getRoutesForStop(stop.stopId)
-                _state.update { it.copy(routesForSelectedStop = routes) }
-            } catch (e: Exception) {
-                Timber.e(e, "loadRoutesForStop failed: ${e.message}")
-                _state.update { it.copy(routesForSelectedStop = _state.value.availableRoutes) }
-            }
-        }
-    }
-
-    private suspend fun refreshNearbyStops(pos: LatLng) {
-        try {
-            val stops = transitDb.getNearbyStops(pos.lat, pos.lng, limit = 500)
-            _state.update { it.copy(nearbyStops = stops) }
-            // Auto-select nearest stop to populate arrival sheet
-            loadUpcomingDepartures(stops.firstOrNull())
-        } catch (e: Exception) {
-            Timber.e(e, "refreshNearbyStops failed: ${e.message}")
-        }
-    }
-
-    private fun loadUpcomingDepartures(nearestStop: Stop?) {
-        if (nearestStop == null) {
-            _state.update { it.copy(arrivalsForUI = emptyList(), isLoadingDepartures = false) }
-            return
-        }
-
-        viewModelScope.launch(Dispatchers.IO) {
-            _state.update { it.copy(isLoadingDepartures = true, departureErrorMessage = null) }
-            try {
-                val now = LocalTime.now()
-                val nowStr = now.format(timeFormatter)
-                
-                val departures = transitDb.getUpcomingDepartures(
-                    stopId = nearestStop.stopId,
-                    afterTime = nowStr,
-                    limit = 20,
                 )
 
-                val uiArrivals = departures.map { dep ->
-                    val depTime = try { LocalTime.parse(dep.departureTime) } catch (e: Exception) { now }
-                    val eta = Duration.between(now, depTime).toMinutes().toInt()
-
-                    RouteArrival(
-                        route = Route(
-                            routeId = dep.routeId,
-                            routeShortName = dep.routeShortName,
-                            routeLongName = dep.routeLongName,
-                            routeType = 3,
-                            routeColor = dep.routeColor,
-                            routeTextColor = dep.routeTextColor
+                BottomSheetScaffold(
+                    scaffoldState = scaffoldState,
+                    sheetPeekHeight = 200.dp,
+                    sheetContainerColor = Color(0xFF1A0A2E),
+                    sheetContentColor = Color.White,
+                    sheetDragHandle = {
+                        Surface(
+                            modifier = Modifier
+                                .padding(vertical = 8.dp)
+                                .size(width = 36.dp, height = 4.dp),
+                            shape = RoundedCornerShape(2.dp),
+                            color = Color.White.copy(alpha = 0.3f),
+                        ) {}
+                    },
+                    sheetContent = {
+                        // Now using the mapped arrivals directly from the ViewModel's state
+                        ArrivalSheetContent(
+                            arrivals = state.arrivalsForUI,
+                            isLoading = state.isLoadingDepartures,
+                            errorMessage = state.departureErrorMessage,
+                            onRouteClicked = { arrival ->
+                                onIntent(
+                                    AppIntent.RouteSelected(
+                                        route = arrival.route,
+                                        stop = state.nearbyStops.firstOrNull()
+                                            ?: return@ArrivalSheetContent,
+                                        destination = null,
+                                    )
+                                )
+                                navController.navigate(Nav.RIDING)
+                            }
+                        )
+                    },
+                ) { paddingValues ->
+                    MapScreen(
+                        state = MapUiState(
+                            userLocation       = state.userLocation,
+                            nearbyStops        = state.nearbyStops,
+                            nearbyVehicles     = state.nearbyVehicles,
+                            selectedStop       = state.selectedStop,
+                            availableRoutes    = state.routesForSelectedStop,
+                            mapProvider        = state.mapProvider,
+                            feedStatus         = state.feedStatus,
+                            permissionsGranted = state.permissionsGranted,
                         ),
-                        headsign = dep.headsign,
-                        nearestStopName = dep.stopName,
-                        etaMinutes = if (eta < 0) 0 else eta,
-                        isRealtime = false,
-                        directionId = dep.directionId,
-                        scheduledTime = dep.departureTime
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(paddingValues),
+                        onIntent = { intent ->
+                            when (intent) {
+                                is MapIntent.ToggleMapProvider ->
+                                    onIntent(AppIntent.ToggleMapProvider)
+                                is MapIntent.StopSelected ->
+                                    onIntent(AppIntent.StopSelected(intent.stop))
+                                is MapIntent.DismissStop ->
+                                    onIntent(AppIntent.StopSelected(null))
+                                else -> {}
+                            }
+                        },
+                        onRouteSelected = { route, stop, dest ->
+                            onIntent(AppIntent.RouteSelected(route, stop, dest))
+                            navController.navigate(Nav.RIDING)
+                        },
                     )
                 }
+            }
 
-                _state.update { 
-                    it.copy(
-                        upcomingDepartures = departures,
-                        arrivalsForUI = uiArrivals,
-                        isLoadingDepartures = false 
-                    ) 
+            composable(Nav.RIDING) {
+                if (state.rideState is RideState.Idle) {
+                    navController.popBackStack()
+                } else {
+                    RidingScreen(
+                        state             = state.rideState,
+                        onConfirmBoarding = { onIntent(AppIntent.ConfirmBoarding) },
+                        onConfirmExit     = { onIntent(AppIntent.ConfirmExit) },
+                        onDismissTrip     = {
+                            onIntent(AppIntent.DismissTrip)
+                            navController.popBackStack()
+                        },
+                        onReset           = {
+                            onIntent(AppIntent.Reset)
+                            navController.popBackStack()
+                        },
+                    )
                 }
-            } catch (e: Exception) {
-                Timber.e(e, "loadUpcomingDepartures failed: ${e.message}")
-                _state.update { 
-                    it.copy(
-                        isLoadingDepartures = false,
-                        departureErrorMessage = "Schedule query failed"
-                    ) 
-                }
+            }
+
+            composable(Nav.SETTINGS) {
+                SettingsScreen()
             }
         }
     }
-
-    private fun runFusionIfNeeded(snapshot: LocationSnapshot) {
-        val rideState = _state.value.rideState
-        if (rideState !is RideState.BoardingWindow &&
-            rideState !is RideState.OnBus
-        ) return
-
-        val bundle = SignalBundle(
-            location = snapshot,
-            routeAlignmentScore = 0.7f,
-            gtfsTripConfidence = estimateGtfsConfidence(),
-            wifiConfidence = locationModule.scanWifiConfidence(),
-            motionScore = locationModule.currentMotionScore(),
-        )
-        val result = fusionEngine.compute(bundle)
-        fsmEngine.process(RideEvent.FusionUpdated(result))
-
-        if (result.meetsThreshold && rideState is RideState.BoardingWindow) {
-            val candidate = buildTripCandidate(rideState) ?: return
-            fsmEngine.process(RideEvent.TripMatchUpdated(candidate))
-        }
-    }
-
-    private fun estimateGtfsConfidence(): Float {
-        val userPos = _state.value.userLocation ?: return 0f
-        val vehicles = gtfsRtClient.vehicles.value
-        if (vehicles.isEmpty()) return 0f
-        val closestDist = vehicles.minOf { v ->
-            locationModule.haversineMeters(userPos, LatLng(v.lat, v.lng))
-        }
-        return when {
-            closestDist < 100 -> 0.95f
-            closestDist < 300 -> 0.80f
-            closestDist < 600 -> 0.60f
-            else              -> 0.20f
-        }
-    }
-
-    private fun buildTripCandidate(state: RideState.BoardingWindow): TripCandidate? {
-        val userPos = _state.value.userLocation ?: return null
-        val vehicle = gtfsRtClient.vehicles.value
-            .minByOrNull { v ->
-                locationModule.haversineMeters(userPos,
-                                               
+}
