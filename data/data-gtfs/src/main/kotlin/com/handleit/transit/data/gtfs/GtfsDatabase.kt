@@ -219,15 +219,39 @@ class TransitDb @Inject constructor(
         }
     }
 
-    // ── Debug Query ───────────────────────────────────────────────────────────
+    // ── Nearby Departures ─────────────────────────────────────────────────────
 
-    suspend fun getDebugData(
-        stopId: String?,
-        routeShortName: String?,
-        startTime: String?
+    suspend fun getUpcomingDeparturesNearby(
+        lat: Double,
+        lng: Double,
+        afterTime: String,
+        radiusStops: Int = 10,
     ): List<UpcomingDeparture> = withContext(Dispatchers.IO) {
         try {
-            val sql = StringBuilder("""
+            val dayOfWeek = LocalDate.now().dayOfWeek.name.lowercase()
+
+            // Step 1 — get nearby stop IDs
+            val nearbyStopIds = getDb().rawQuery(
+                """
+                SELECT stopId FROM stops
+                ORDER BY ((lat - ?) * (lat - ?) + (lng - ?) * (lng - ?))
+                LIMIT ?
+                """.trimIndent(),
+                arrayOf(lat.toString(), lat.toString(), lng.toString(), lng.toString(), radiusStops.toString())
+            ).use { cursor ->
+                val ids = mutableListOf<String>()
+                while (cursor.moveToNext()) ids.add(cursor.getString(0))
+                ids
+            }
+
+            if (nearbyStopIds.isEmpty()) return@withContext emptyList()
+
+            val placeholders = nearbyStopIds.joinToString(",") { "?" }
+            val twoHoursLater = addHours(afterTime, 2)
+
+            // Step 2 — get all departures for those stops within next 2 hours
+            val allDepartures = getDb().rawQuery(
+                """
                 SELECT
                     r.routeId,
                     r.routeShortName,
@@ -244,40 +268,34 @@ class TransitDb @Inject constructor(
                 INNER JOIN trips t ON t.tripId = st.tripId
                 INNER JOIN routes r ON r.routeId = t.routeId
                 INNER JOIN stops s ON s.stopId = st.stopId
-                WHERE 1=1
-            """.trimIndent())
-
-            val args = mutableListOf<String>()
-
-            if (!stopId.isNullOrBlank()) {
-                sql.append(" AND st.stopId = ?")
-                args.add(stopId)
-            }
-            if (!routeShortName.isNullOrBlank()) {
-                sql.append(" AND r.routeShortName = ?")
-                args.add(routeShortName)
-            }
-            if (!startTime.isNullOrBlank()) {
-                sql.append(" AND st.departureTime >= ?")
-                args.add(startTime)
-            }
-
-            sql.append(" ORDER BY st.departureTime ASC LIMIT 100")
-
-            getDb().rawQuery(sql.toString(), args.toTypedArray()).use { cursor ->
+                LEFT JOIN calendar c ON t.serviceId = c.serviceId
+                WHERE st.stopId IN ($placeholders)
+                AND st.departureTime >= ?
+                AND st.departureTime <= ?
+                AND (c.$dayOfWeek = 1 OR c.serviceId IS NULL)
+                ORDER BY st.departureTime ASC
+                """.trimIndent(),
+                (nearbyStopIds + listOf(afterTime, twoHoursLater)).toTypedArray()
+            ).use { cursor ->
                 val results = mutableListOf<UpcomingDeparture>()
-                while (cursor.moveToNext()) {
-                    results.add(cursor.toUpcomingDeparture())
-                }
+                while (cursor.moveToNext()) results.add(cursor.toUpcomingDeparture())
                 results
             }
+
+            // Step 3 — deduplicate by route+direction, keep soonest only
+            val seen = mutableSetOf<String>()
+            allDepartures.filter { dep ->
+                val key = "${dep.routeId}-${dep.directionId}"
+                seen.add(key)
+            }.sortedBy { it.departureTime }
+
         } catch (e: Exception) {
-            Timber.e(e, "TransitDb: getDebugData failed")
+            Timber.e(e, "TransitDb: getUpcomingDeparturesNearby failed")
             emptyList()
         }
     }
 
-    // ── Upcoming Departures ───────────────────────────────────────────────────
+    // ── Single Stop Departures ────────────────────────────────────────────────
 
     suspend fun getUpcomingDepartures(
         stopId: String,
@@ -286,7 +304,6 @@ class TransitDb @Inject constructor(
     ): List<UpcomingDeparture> = withContext(Dispatchers.IO) {
         try {
             val dayOfWeek = LocalDate.now().dayOfWeek.name.lowercase()
-
             getDb().rawQuery(
                 """
                 SELECT
@@ -319,7 +336,7 @@ class TransitDb @Inject constructor(
                 results
             }
         } catch (e: Exception) {
-            Timber.e(e, "TransitDb: getUpcomingDepartures failed. Falling back.")
+            Timber.e(e, "TransitDb: getUpcomingDepartures failed — falling back")
             fallbackSimpleQuery(stopId, afterTime, limit)
         }
     }
@@ -362,6 +379,76 @@ class TransitDb @Inject constructor(
         } catch (e: Exception) {
             Timber.e(e, "TransitDb: fallbackSimpleQuery failed")
             emptyList()
+        }
+    }
+
+    // ── Debug Query ───────────────────────────────────────────────────────────
+
+    suspend fun getDebugData(
+        stopId: String?,
+        routeShortName: String?,
+        startTime: String?
+    ): List<UpcomingDeparture> = withContext(Dispatchers.IO) {
+        try {
+            val sql = StringBuilder(
+                """
+                SELECT
+                    r.routeId,
+                    r.routeShortName,
+                    r.routeLongName,
+                    r.routeColor,
+                    r.routeTextColor,
+                    t.tripHeadsign,
+                    t.directionId,
+                    st.departureTime,
+                    st.stopSequence,
+                    s.stopName,
+                    st.stopId
+                FROM stop_times st
+                INNER JOIN trips t ON t.tripId = st.tripId
+                INNER JOIN routes r ON r.routeId = t.routeId
+                INNER JOIN stops s ON s.stopId = st.stopId
+                WHERE 1=1
+                """.trimIndent()
+            )
+
+            val args = mutableListOf<String>()
+
+            if (!stopId.isNullOrBlank()) {
+                sql.append(" AND TRIM(st.stopId) = ?")
+                args.add(stopId.trim())
+            }
+            if (!routeShortName.isNullOrBlank()) {
+                sql.append(" AND TRIM(r.routeShortName) = ?")
+                args.add(routeShortName.trim())
+            }
+            if (!startTime.isNullOrBlank()) {
+                sql.append(" AND st.departureTime >= ?")
+                args.add(startTime.trim())
+            }
+
+            sql.append(" ORDER BY st.departureTime ASC LIMIT 100")
+
+            getDb().rawQuery(sql.toString(), args.toTypedArray()).use { cursor ->
+                val results = mutableListOf<UpcomingDeparture>()
+                while (cursor.moveToNext()) results.add(cursor.toUpcomingDeparture())
+                results
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "TransitDb: getDebugData failed")
+            emptyList()
+        }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private fun addHours(time: String, hours: Int): String {
+        return try {
+            val parts = time.split(":")
+            val h = parts[0].toInt() + hours
+            "%02d:%s:%s".format(h, parts[1], parts[2])
+        } catch (e: Exception) {
+            time
         }
     }
 
