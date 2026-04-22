@@ -8,7 +8,6 @@ import com.handleit.transit.data.gtfs.TransitDb
 import com.handleit.transit.data.gtfsrt.GtfsRtClient
 import com.handleit.transit.data.location.LocationModule
 import com.handleit.transit.data.location.SensorFusionEngine
-import com.handleit.transit.feature.map.RouteArrival
 import com.handleit.transit.fsm.*
 import com.handleit.transit.model.*
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -18,7 +17,6 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
-import java.time.Duration
 import javax.inject.Inject
 
 data class AppState(
@@ -29,19 +27,11 @@ data class AppState(
     val availableRoutes: List<Route> = emptyList(),
     val routesForSelectedStop: List<Route> = emptyList(),
     val upcomingDepartures: List<UpcomingDeparture> = emptyList(),
-    val arrivalsForUI: List<RouteArrival> = emptyList(), 
-    val isLoadingDepartures: Boolean = false,           
-    val departureErrorMessage: String? = null,          
     val feedStatus: FeedStatus = FeedStatus.IDLE,
     val mapProvider: MapProvider = TransitConfig.MAP_PROVIDER_DEFAULT,
     val permissionsGranted: Boolean = false,
     val transitionLog: List<TransitionLog> = emptyList(),
     val selectedStop: Stop? = null,
-    
-    // Diagnostic GTFS Lab State
-    val debugResults: List<UpcomingDeparture> = emptyList(),
-    val isDebugLoading: Boolean = false,
-    val debugErrorMessage: String? = null
 )
 
 sealed class AppIntent {
@@ -56,14 +46,7 @@ sealed class AppIntent {
     object Reset : AppIntent()
     object ToggleMapProvider : AppIntent()
     data class StopSelected(val stop: Stop?) : AppIntent()
-    
-    // Diagnostic GTFS Lab Intents
-    data class RunDebugQuery(
-        val stopId: String?,
-        val routeNumber: String?,
-        val time: String?
-    ) : AppIntent()
-    object PromoteDebugToUI : AppIntent()
+    data class PromoteDepartures(val departures: List<UpcomingDeparture>) : AppIntent()
 }
 
 @HiltViewModel
@@ -75,6 +58,7 @@ class AppViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val transitionLogs = mutableListOf<TransitionLog>()
+    private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
 
     private val _state = MutableStateFlow(AppState())
     val state: StateFlow<AppState> = _state.asStateFlow()
@@ -84,8 +68,6 @@ class AppViewModel @Inject constructor(
         if (transitionLogs.size > 100) transitionLogs.removeAt(0)
         _state.update { it.copy(transitionLog = transitionLogs.toList()) }
     })
-
-    private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
 
     init {
         observeFsmState()
@@ -128,60 +110,10 @@ class AppViewModel @Inject constructor(
                 intent.stop?.let { stop -> loadRoutesForStop(stop) }
                     ?: _state.update { it.copy(routesForSelectedStop = emptyList()) }
             }
-            is AppIntent.RunDebugQuery -> executeDebugQuery(intent)
-            is AppIntent.PromoteDebugToUI -> promoteDebugToUI()
-        }
-    }
-
-    private fun executeDebugQuery(intent: AppIntent.RunDebugQuery) {
-        viewModelScope.launch(Dispatchers.IO) {
-            _state.update { it.copy(isDebugLoading = true, debugErrorMessage = null) }
-            try {
-                val results = transitDb.getDebugData(
-                    stopId = intent.stopId,
-                    routeShortName = intent.routeNumber,
-                    startTime = intent.time
-                )
-                _state.update { it.copy(debugResults = results, isDebugLoading = false) }
-            } catch (e: Exception) {
-                Timber.e(e, "executeDebugQuery failed: ${e.message}")
-                _state.update { it.copy(debugErrorMessage = e.message, isDebugLoading = false) }
+            is AppIntent.PromoteDepartures -> {
+                // Diagnostic lab pushes results directly into upcomingDepartures
+                _state.update { it.copy(upcomingDepartures = intent.departures) }
             }
-        }
-    }
-
-    private fun promoteDebugToUI() {
-        val debugData = _state.value.debugResults
-        val now = LocalTime.now()
-
-        val uiMapped = debugData.map { dep ->
-            val depTime = try { LocalTime.parse(dep.departureTime) } catch (e: Exception) { now }
-            val eta = Duration.between(now, depTime).toMinutes().toInt()
-
-            RouteArrival(
-                route = Route(
-                    routeId = dep.routeId,
-                    routeShortName = dep.routeShortName,
-                    routeLongName = dep.routeLongName,
-                    routeType = 3,
-                    routeColor = dep.routeColor,
-                    routeTextColor = dep.routeTextColor
-                ),
-                headsign = dep.headsign,
-                nearestStopName = dep.stopName,
-                etaMinutes = if (eta < 0) 0 else eta,
-                isRealtime = false,
-                directionId = dep.directionId,
-                scheduledTime = dep.departureTime
-            )
-        }
-        
-        _state.update { 
-            it.copy(
-                arrivalsForUI = uiMapped,
-                departureErrorMessage = if (uiMapped.isEmpty()) "No results promoted." else null,
-                isLoadingDepartures = false
-            ) 
         }
     }
 
@@ -253,68 +185,25 @@ class AppViewModel @Inject constructor(
         try {
             val stops = transitDb.getNearbyStops(pos.lat, pos.lng, limit = 500)
             _state.update { it.copy(nearbyStops = stops) }
-            // Auto-select nearest stop to populate arrival sheet
-            loadUpcomingDepartures(stops.firstOrNull())
+            loadUpcomingDepartures(pos)
         } catch (e: Exception) {
             Timber.e(e, "refreshNearbyStops failed: ${e.message}")
         }
     }
 
-    private fun loadUpcomingDepartures(nearestStop: Stop?) {
-        if (nearestStop == null) {
-            _state.update { it.copy(arrivalsForUI = emptyList(), isLoadingDepartures = false) }
-            return
-        }
-
+    private fun loadUpcomingDepartures(pos: LatLng) {
         viewModelScope.launch(Dispatchers.IO) {
-            _state.update { it.copy(isLoadingDepartures = true, departureErrorMessage = null) }
             try {
-                val now = LocalTime.now()
-                val nowStr = now.format(timeFormatter)
-                
-                val departures = transitDb.getUpcomingDepartures(
-                    stopId = nearestStop.stopId,
-                    afterTime = nowStr,
-                    limit = 20,
+                val now = LocalTime.now().format(timeFormatter)
+                val departures = transitDb.getUpcomingDeparturesNearby(
+                    lat = pos.lat,
+                    lng = pos.lng,
+                    afterTime = now,
+                    radiusStops = 10,
                 )
-
-                val uiArrivals = departures.map { dep ->
-                    val depTime = try { LocalTime.parse(dep.departureTime) } catch (e: Exception) { now }
-                    val eta = Duration.between(now, depTime).toMinutes().toInt()
-
-                    RouteArrival(
-                        route = Route(
-                            routeId = dep.routeId,
-                            routeShortName = dep.routeShortName,
-                            routeLongName = dep.routeLongName,
-                            routeType = 3,
-                            routeColor = dep.routeColor,
-                            routeTextColor = dep.routeTextColor
-                        ),
-                        headsign = dep.headsign,
-                        nearestStopName = dep.stopName,
-                        etaMinutes = if (eta < 0) 0 else eta,
-                        isRealtime = false,
-                        directionId = dep.directionId,
-                        scheduledTime = dep.departureTime
-                    )
-                }
-
-                _state.update { 
-                    it.copy(
-                        upcomingDepartures = departures,
-                        arrivalsForUI = uiArrivals,
-                        isLoadingDepartures = false 
-                    ) 
-                }
+                _state.update { it.copy(upcomingDepartures = departures) }
             } catch (e: Exception) {
                 Timber.e(e, "loadUpcomingDepartures failed: ${e.message}")
-                _state.update { 
-                    it.copy(
-                        isLoadingDepartures = false,
-                        departureErrorMessage = "Schedule query failed"
-                    ) 
-                }
             }
         }
     }
