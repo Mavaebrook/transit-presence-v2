@@ -5,6 +5,8 @@ import android.database.sqlite.SQLiteDatabase
 import com.handleit.transit.model.*
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.FileOutputStream
@@ -56,6 +58,167 @@ class TransitDb @Inject constructor(
         return SQLiteDatabase.openDatabase(dbFile.path, null, SQLiteDatabase.OPEN_READONLY)
     }
 
+    // ── Stops ─────────────────────────────────────────────────────────────────
+
+    suspend fun getStopById(id: String): Stop? = withContext(Dispatchers.IO) {
+        try {
+            getDb().rawQuery(
+                "SELECT stopId, stopName, lat, lng, wheelchairBoarding FROM stops WHERE stopId = ? LIMIT 1",
+                arrayOf(id)
+            ).use { cursor ->
+                if (cursor.moveToFirst()) cursor.toStop() else null
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "TransitDb: getStopById failed")
+            null
+        }
+    }
+
+    suspend fun getNearbyStops(lat: Double, lng: Double, limit: Int = 20): List<Stop> =
+        withContext(Dispatchers.IO) {
+            try {
+                getDb().rawQuery(
+                    "SELECT stopId, stopName, lat, lng, wheelchairBoarding FROM stops ORDER BY ((lat - ?) * (lat - ?) + (lng - ?) * (lng - ?)) LIMIT ?",
+                    arrayOf(lat.toString(), lat.toString(), lng.toString(), lng.toString(), limit.toString())
+                ).use { cursor ->
+                    val results = mutableListOf<Stop>()
+                    while (cursor.moveToNext()) results.add(cursor.toStop())
+                    results
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "TransitDb: getNearbyStops failed")
+                emptyList()
+            }
+        }
+
+    suspend fun getStopsInBounds(
+        minLat: Double,
+        maxLat: Double,
+        minLng: Double,
+        maxLng: Double
+    ): List<Stop> = withContext(Dispatchers.IO) {
+        try {
+            getDb().rawQuery(
+                """
+                SELECT stopId, stopName, lat, lng, wheelchairBoarding
+                FROM stops
+                WHERE lat BETWEEN ? AND ?
+                AND lng BETWEEN ? AND ?
+                """.trimIndent(),
+                arrayOf(
+                    minLat.toString(),
+                    maxLat.toString(),
+                    minLng.toString(),
+                    maxLng.toString()
+                )
+            ).use { cursor ->
+                val results = mutableListOf<Stop>()
+                while (cursor.moveToNext()) results.add(cursor.toStop())
+                results
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "TransitDb: getStopsInBounds failed")
+            emptyList()
+        }
+    }
+
+    // ── Routes ────────────────────────────────────────────────────────────────
+
+    suspend fun getAllRoutes(): List<Route> = withContext(Dispatchers.IO) {
+        try {
+            getDb().rawQuery(
+                "SELECT routeId, routeShortName, routeLongName, routeType, routeColor, routeTextColor FROM routes ORDER BY routeShortName",
+                null
+            ).use { cursor ->
+                val results = mutableListOf<Route>()
+                while (cursor.moveToNext()) results.add(cursor.toRoute())
+                results
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "TransitDb: getAllRoutes failed")
+            emptyList()
+        }
+    }
+
+    suspend fun getRoutesForStop(stopId: String): List<Route> = withContext(Dispatchers.IO) {
+        try {
+            getDb().rawQuery(
+                """
+                SELECT DISTINCT r.routeId, r.routeShortName, r.routeLongName,
+                       r.routeType, r.routeColor, r.routeTextColor
+                FROM routes r
+                INNER JOIN trips t ON t.routeId = r.routeId
+                INNER JOIN stop_times st ON st.tripId = t.tripId
+                WHERE st.stopId = ?
+                ORDER BY r.routeShortName
+                """.trimIndent(),
+                arrayOf(stopId)
+            ).use { cursor ->
+                val results = mutableListOf<Route>()
+                while (cursor.moveToNext()) results.add(cursor.toRoute())
+                results
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "TransitDb: getRoutesForStop failed")
+            emptyList()
+        }
+    }
+
+    fun observeAllRoutes(): Flow<List<Route>> = flow {
+        emit(getAllRoutes())
+    }
+
+    // ── Trips ─────────────────────────────────────────────────────────────────
+
+    suspend fun getStopsForTrip(
+        routeId: String,
+        directionId: Int,
+        afterStopSequence: Int = 0,
+    ): List<TripStop> = withContext(Dispatchers.IO) {
+        try {
+            getDb().rawQuery(
+                """
+                SELECT
+                    s.stopId,
+                    s.stopName,
+                    s.lat,
+                    s.lng,
+                    st.arrivalTime,
+                    st.departureTime,
+                    st.stopSequence
+                FROM stop_times st
+                INNER JOIN trips t ON t.tripId = st.tripId
+                INNER JOIN stops s ON s.stopId = st.stopId
+                WHERE t.routeId = ?
+                AND t.directionId = ?
+                AND st.stopSequence > ?
+                ORDER BY st.stopSequence ASC
+                LIMIT 50
+                """.trimIndent(),
+                arrayOf(routeId, directionId.toString(), afterStopSequence.toString())
+            ).use { cursor ->
+                val results = mutableListOf<TripStop>()
+                while (cursor.moveToNext()) {
+                    results.add(
+                        TripStop(
+                            stopId = cursor.getString(0),
+                            stopName = cursor.getString(1),
+                            lat = cursor.getDouble(2),
+                            lng = cursor.getDouble(3),
+                            arrivalTime = cursor.getString(4),
+                            departureTime = cursor.getString(5),
+                            stopSequence = cursor.getInt(6),
+                        )
+                    )
+                }
+                results
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "TransitDb: getStopsForTrip failed")
+            emptyList()
+        }
+    }
+
     // ── Debug Query ───────────────────────────────────────────────────────────
 
     suspend fun getDebugData(
@@ -104,21 +267,7 @@ class TransitDb @Inject constructor(
             getDb().rawQuery(sql.toString(), args.toTypedArray()).use { cursor ->
                 val results = mutableListOf<UpcomingDeparture>()
                 while (cursor.moveToNext()) {
-                    results.add(
-                        UpcomingDeparture(
-                            routeId = cursor.getString(0),
-                            routeShortName = cursor.getString(1),
-                            routeLongName = cursor.getString(2),
-                            routeColor = cursor.getString(3) ?: "FFFFFF",
-                            routeTextColor = cursor.getString(4) ?: "000000",
-                            headsign = cursor.getString(5) ?: "",
-                            directionId = cursor.getInt(6),
-                            departureTime = cursor.getString(7),
-                            stopSequence = cursor.getInt(8),
-                            stopName = cursor.getString(9),
-                            stopId = cursor.getString(10) // Fixed missing mapping
-                        )
-                    )
+                    results.add(cursor.toUpcomingDeparture())
                 }
                 results
             }
@@ -166,23 +315,7 @@ class TransitDb @Inject constructor(
                 arrayOf(stopId, afterTime, limit.toString())
             ).use { cursor ->
                 val results = mutableListOf<UpcomingDeparture>()
-                while (cursor.moveToNext()) {
-                    results.add(
-                        UpcomingDeparture(
-                            routeId = cursor.getString(0),
-                            routeShortName = cursor.getString(1),
-                            routeLongName = cursor.getString(2),
-                            routeColor = cursor.getString(3) ?: "FFFFFF",
-                            routeTextColor = cursor.getString(4) ?: "000000",
-                            headsign = cursor.getString(5) ?: "",
-                            directionId = cursor.getInt(6),
-                            departureTime = cursor.getString(7),
-                            stopSequence = cursor.getInt(8),
-                            stopName = cursor.getString(9),
-                            stopId = cursor.getString(10)
-                        )
-                    )
-                }
+                while (cursor.moveToNext()) results.add(cursor.toUpcomingDeparture())
                 results
             }
         } catch (e: Exception) {
@@ -223,23 +356,7 @@ class TransitDb @Inject constructor(
                 arrayOf(stopId, afterTime, limit.toString())
             ).use { cursor ->
                 val results = mutableListOf<UpcomingDeparture>()
-                while (cursor.moveToNext()) {
-                    results.add(
-                        UpcomingDeparture(
-                            routeId = cursor.getString(0),
-                            routeShortName = cursor.getString(1),
-                            routeLongName = cursor.getString(2),
-                            routeColor = cursor.getString(3) ?: "FFFFFF",
-                            routeTextColor = cursor.getString(4) ?: "000000",
-                            headsign = cursor.getString(5) ?: "",
-                            directionId = cursor.getInt(6),
-                            departureTime = cursor.getString(7),
-                            stopSequence = cursor.getInt(8),
-                            stopName = cursor.getString(9),
-                            stopId = cursor.getString(10) // Fixed missing mapping
-                        )
-                    )
-                }
+                while (cursor.moveToNext()) results.add(cursor.toUpcomingDeparture())
                 results
             }
         } catch (e: Exception) {
@@ -247,4 +364,37 @@ class TransitDb @Inject constructor(
             emptyList()
         }
     }
+
+    // ── Cursor Helpers ────────────────────────────────────────────────────────
+
+    private fun android.database.Cursor.toStop() = Stop(
+        stopId = getString(0),
+        stopName = getString(1),
+        lat = getDouble(2),
+        lng = getDouble(3),
+        wheelchairBoarding = getInt(4)
+    )
+
+    private fun android.database.Cursor.toRoute() = Route(
+        routeId = getString(0),
+        routeShortName = getString(1),
+        routeLongName = getString(2),
+        routeType = getInt(3),
+        routeColor = getString(4) ?: "FFFFFF",
+        routeTextColor = getString(5) ?: "000000"
+    )
+
+    private fun android.database.Cursor.toUpcomingDeparture() = UpcomingDeparture(
+        routeId = getString(0),
+        routeShortName = getString(1),
+        routeLongName = getString(2),
+        routeColor = getString(3) ?: "FFFFFF",
+        routeTextColor = getString(4) ?: "000000",
+        headsign = getString(5) ?: "",
+        directionId = getInt(6),
+        departureTime = getString(7),
+        stopSequence = getInt(8),
+        stopName = getString(9),
+        stopId = getString(10),
+    )
 }
