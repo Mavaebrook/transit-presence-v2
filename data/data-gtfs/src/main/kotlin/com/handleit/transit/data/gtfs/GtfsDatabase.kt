@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.FileOutputStream
+import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -167,17 +168,16 @@ class TransitDb @Inject constructor(
 
     /**
      * Returns upcoming departures from a stop after [afterTime].
-     * [afterTime] format: "HH:MM:SS" — pass current time of day.
-     * GTFS times can exceed 24:00:00 for overnight trips so string
-     * comparison works correctly as-is.
-     * [limit] controls max results per direction.
+     * Account for current day of week to ensure service validity.
      */
     suspend fun getUpcomingDepartures(
         stopId: String,
         afterTime: String,
-        limit: Int = 5,
+        limit: Int = 30, // Higher limit to capture both Inbound and Outbound
     ): List<UpcomingDeparture> = withContext(Dispatchers.IO) {
         try {
+            val dayOfWeek = LocalDate.now().dayOfWeek.name.lowercase()
+            
             getDb().rawQuery(
                 """
                 SELECT
@@ -191,6 +191,51 @@ class TransitDb @Inject constructor(
                     st.departureTime,
                     st.stopSequence,
                     s.stopName
+                FROM stop_times st
+                INNER JOIN trips t ON t.tripId = st.tripId
+                INNER JOIN routes r ON r.routeId = t.routeId
+                INNER JOIN stops s ON s.stopId = st.stopId
+                LEFT JOIN calendar c ON t.serviceId = c.serviceId
+                WHERE st.stopId = ?
+                AND st.departureTime >= ?
+                AND (c.$dayOfWeek = 1 OR c.serviceId IS NULL)
+                ORDER BY st.departureTime ASC
+                LIMIT ?
+                """.trimIndent(),
+                arrayOf(stopId, afterTime, limit.toString())
+            ).use { cursor ->
+                val results = mutableListOf<UpcomingDeparture>()
+                while (cursor.moveToNext()) {
+                    results.add(
+                        UpcomingDeparture(
+                            routeId = cursor.getString(0),
+                            routeShortName = cursor.getString(1),
+                            routeLongName = cursor.getString(2),
+                            routeColor = cursor.getString(3) ?: "FFFFFF",
+                            routeTextColor = cursor.getString(4) ?: "000000",
+                            headsign = cursor.getString(5) ?: "",
+                            directionId = cursor.getInt(6),
+                            departureTime = cursor.getString(7),
+                            stopSequence = cursor.getInt(8),
+                            stopName = cursor.getString(9),
+                        )
+                    )
+                }
+                results
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "TransitDb: getUpcomingDepartures failed. Falling back to simple query.")
+            fallbackSimpleQuery(stopId, afterTime, limit)
+        }
+    }
+
+    private fun fallbackSimpleQuery(stopId: String, afterTime: String, limit: Int): List<UpcomingDeparture> {
+        return try {
+            getDb().rawQuery(
+                """
+                SELECT
+                    r.routeId, r.routeShortName, r.routeLongName, r.routeColor, r.routeTextColor,
+                    t.tripHeadsign, t.directionId, st.departureTime, st.stopSequence, s.stopName
                 FROM stop_times st
                 INNER JOIN trips t ON t.tripId = st.tripId
                 INNER JOIN routes r ON r.routeId = t.routeId
@@ -222,14 +267,13 @@ class TransitDb @Inject constructor(
                 results
             }
         } catch (e: Exception) {
-            Timber.e(e, "TransitDb: getUpcomingDepartures failed")
+            Timber.e(e, "TransitDb: Fallback query also failed")
             emptyList()
         }
     }
 
     /**
      * Returns all stops for a given trip in sequence order.
-     * Used to build the timeline screen.
      */
     suspend fun getStopsForTrip(
         routeId: String,
