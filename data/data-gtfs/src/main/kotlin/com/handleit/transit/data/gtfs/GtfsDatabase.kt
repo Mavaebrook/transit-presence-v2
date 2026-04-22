@@ -116,7 +116,7 @@ class TransitDb @Inject constructor(
                             departureTime = cursor.getString(7),
                             stopSequence = cursor.getInt(8),
                             stopName = cursor.getString(9),
-                    
+                            stopId = cursor.getString(10) // Fixed missing mapping
                         )
                     )
                 }
@@ -179,7 +179,7 @@ class TransitDb @Inject constructor(
                             departureTime = cursor.getString(7),
                             stopSequence = cursor.getInt(8),
                             stopName = cursor.getString(9),
-                            stopId = cursor.getString(10) // ✅ FIX
+                            stopId = cursor.getString(10)
                         )
                     )
                 }
@@ -236,6 +236,7 @@ class TransitDb @Inject constructor(
                             departureTime = cursor.getString(7),
                             stopSequence = cursor.getInt(8),
                             stopName = cursor.getString(9),
+                            stopId = cursor.getString(10) // Fixed missing mapping
                         )
                     )
                 }
