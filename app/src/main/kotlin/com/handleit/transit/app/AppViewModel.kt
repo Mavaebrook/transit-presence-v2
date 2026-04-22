@@ -29,14 +29,19 @@ data class AppState(
     val availableRoutes: List<Route> = emptyList(),
     val routesForSelectedStop: List<Route> = emptyList(),
     val upcomingDepartures: List<UpcomingDeparture> = emptyList(),
-    val arrivalsForUI: List<RouteArrival> = emptyList(), // Added for UI mapping
-    val isLoadingDepartures: Boolean = false,           // Added for UI state
-    val departureErrorMessage: String? = null,          // Added for UI state
+    val arrivalsForUI: List<RouteArrival> = emptyList(), 
+    val isLoadingDepartures: Boolean = false,           
+    val departureErrorMessage: String? = null,          
     val feedStatus: FeedStatus = FeedStatus.IDLE,
     val mapProvider: MapProvider = TransitConfig.MAP_PROVIDER_DEFAULT,
     val permissionsGranted: Boolean = false,
     val transitionLog: List<TransitionLog> = emptyList(),
     val selectedStop: Stop? = null,
+    
+    // Diagnostic GTFS Lab State
+    val debugResults: List<UpcomingDeparture> = emptyList(),
+    val isDebugLoading: Boolean = false,
+    val debugErrorMessage: String? = null
 )
 
 sealed class AppIntent {
@@ -51,6 +56,14 @@ sealed class AppIntent {
     object Reset : AppIntent()
     object ToggleMapProvider : AppIntent()
     data class StopSelected(val stop: Stop?) : AppIntent()
+    
+    // Diagnostic GTFS Lab Intents
+    data class RunDebugQuery(
+        val stopId: String?,
+        val routeNumber: String?,
+        val time: String?
+    ) : AppIntent()
+    object PromoteDebugToUI : AppIntent()
 }
 
 @HiltViewModel
@@ -115,229 +128,22 @@ class AppViewModel @Inject constructor(
                 intent.stop?.let { stop -> loadRoutesForStop(stop) }
                     ?: _state.update { it.copy(routesForSelectedStop = emptyList()) }
             }
+            is AppIntent.RunDebugQuery -> executeDebugQuery(intent)
+            is AppIntent.PromoteDebugToUI -> promoteDebugToUI()
         }
     }
 
-    private fun observeFsmState() {
-        fsmEngine.state
-            .onEach { rideState -> _state.update { it.copy(rideState = rideState) } }
-            .launchIn(viewModelScope)
-    }
-
-    private fun observeLocation() {
-        viewModelScope.launch {
-            try {
-                locationModule.locationFlow().collect { snapshot ->
-                    _state.update { it.copy(userLocation = snapshot.latLng) }
-                    fsmEngine.process(RideEvent.LocationUpdated(snapshot))
-                    refreshNearbyStops(snapshot.latLng)
-                    runFusionIfNeeded(snapshot)
-                    checkEtaThresholds()
-                }
-            } catch (e: Exception) {
-                Timber.e(e, "Location flow error: ${e.message}")
-            }
-        }
-    }
-
-    private fun observeVehicles() {
-        viewModelScope.launch {
-            try {
-                gtfsRtClient.vehicles.collect { vehicles ->
-                    _state.update { it.copy(nearbyVehicles = vehicles) }
-                    updateArrivals()
-                }
-            } catch (e: Exception) {
-                Timber.e(e, "Vehicles flow error: ${e.message}")
-            }
-        }
-    }
-
-    private fun observeFeedStatus() {
-        gtfsRtClient.feedStatus
-            .onEach { status -> _state.update { it.copy(feedStatus = status) } }
-            .launchIn(viewModelScope)
-    }
-
-    private fun loadRoutes() {
+    private fun executeDebugQuery(intent: AppIntent.RunDebugQuery) {
         viewModelScope.launch(Dispatchers.IO) {
+            _state.update { it.copy(isDebugLoading = true, debugErrorMessage = null) }
             try {
-                val routes = transitDb.getAllRoutes()
-                _state.update { it.copy(availableRoutes = routes) }
-            } catch (e: Exception) {
-                Timber.e(e, "loadRoutes failed: ${e.message}")
-            }
-        }
-    }
-
-    private fun loadRoutesForStop(stop: Stop) {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val routes = transitDb.getRoutesForStop(stop.stopId)
-                _state.update { it.copy(routesForSelectedStop = routes) }
-            } catch (e: Exception) {
-                Timber.e(e, "loadRoutesForStop failed: ${e.message}")
-                _state.update { it.copy(routesForSelectedStop = _state.value.availableRoutes) }
-            }
-        }
-    }
-
-    private suspend fun refreshNearbyStops(pos: LatLng) {
-        try {
-            val stops = transitDb.getNearbyStops(pos.lat, pos.lng, limit = 500)
-            _state.update { it.copy(nearbyStops = stops) }
-            // Auto-select nearest stop to populate arrival sheet
-            loadUpcomingDepartures(stops.firstOrNull())
-        } catch (e: Exception) {
-            Timber.e(e, "refreshNearbyStops failed: ${e.message}")
-        }
-    }
-
-    private fun loadUpcomingDepartures(nearestStop: Stop?) {
-        if (nearestStop == null) {
-            _state.update { it.copy(arrivalsForUI = emptyList(), isLoadingDepartures = false) }
-            return
-        }
-
-        viewModelScope.launch(Dispatchers.IO) {
-            _state.update { it.copy(isLoadingDepartures = true, departureErrorMessage = null) }
-            try {
-                val now = LocalTime.now()
-                val nowStr = now.format(timeFormatter)
-                
-                val departures = transitDb.getUpcomingDepartures(
-                    stopId = nearestStop.stopId,
-                    afterTime = nowStr,
-                    limit = 20,
+                val results = transitDb.getDebugData(
+                    stopId = intent.stopId,
+                    routeShortName = intent.routeNumber,
+                    startTime = intent.time
                 )
-
-                val uiArrivals = departures.map { dep ->
-                    val depTime = try { LocalTime.parse(dep.departureTime) } catch (e: Exception) { now }
-                    val eta = Duration.between(now, depTime).toMinutes().toInt()
-
-                    RouteArrival(
-                        route = Route(
-                            routeId = dep.routeId,
-                            routeShortName = dep.routeShortName,
-                            routeLongName = dep.routeLongName,
-                            routeType = 3,
-                            routeColor = dep.routeColor,
-                            routeTextColor = dep.routeTextColor
-                        ),
-                        headsign = dep.headsign,
-                        nearestStopName = dep.stopName,
-                        etaMinutes = if (eta < 0) 0 else eta,
-                        isRealtime = false,
-                        directionId = dep.directionId,
-                        scheduledTime = dep.departureTime
-                    )
-                }
-
-                _state.update { 
-                    it.copy(
-                        upcomingDepartures = departures,
-                        arrivalsForUI = uiArrivals,
-                        isLoadingDepartures = false 
-                    ) 
-                }
+                _state.update { it.copy(debugResults = results, isDebugLoading = false) }
             } catch (e: Exception) {
-                Timber.e(e, "loadUpcomingDepartures failed: ${e.message}")
-                _state.update { 
-                    it.copy(
-                        isLoadingDepartures = false,
-                        departureErrorMessage = "Schedule query failed"
-                    ) 
-                }
-            }
-        }
-    }
-
-    private fun runFusionIfNeeded(snapshot: LocationSnapshot) {
-        val rideState = _state.value.rideState
-        if (rideState !is RideState.BoardingWindow &&
-            rideState !is RideState.OnBus
-        ) return
-
-        val bundle = SignalBundle(
-            location = snapshot,
-            routeAlignmentScore = 0.7f,
-            gtfsTripConfidence = estimateGtfsConfidence(),
-            wifiConfidence = locationModule.scanWifiConfidence(),
-            motionScore = locationModule.currentMotionScore(),
-        )
-        val result = fusionEngine.compute(bundle)
-        fsmEngine.process(RideEvent.FusionUpdated(result))
-
-        if (result.meetsThreshold && rideState is RideState.BoardingWindow) {
-            val candidate = buildTripCandidate(rideState) ?: return
-            fsmEngine.process(RideEvent.TripMatchUpdated(candidate))
-        }
-    }
-
-    private fun estimateGtfsConfidence(): Float {
-        val userPos = _state.value.userLocation ?: return 0f
-        val vehicles = gtfsRtClient.vehicles.value
-        if (vehicles.isEmpty()) return 0f
-        val closestDist = vehicles.minOf { v ->
-            locationModule.haversineMeters(userPos, LatLng(v.lat, v.lng))
-        }
-        return when {
-            closestDist < 100 -> 0.95f
-            closestDist < 300 -> 0.80f
-            closestDist < 600 -> 0.60f
-            else              -> 0.20f
-        }
-    }
-
-    private fun buildTripCandidate(state: RideState.BoardingWindow): TripCandidate? {
-        val userPos = _state.value.userLocation ?: return null
-        val vehicle = gtfsRtClient.vehicles.value
-            .minByOrNull { v ->
-                locationModule.haversineMeters(userPos, LatLng(v.lat, v.lng))
-            } ?: return null
-        return TripCandidate(
-            trip = Trip(vehicle.tripId ?: "", state.route.routeId, ""),
-            route = state.route,
-            vehicle = vehicle,
-            routeAlignmentScore = 0.8f,
-            gtfsConfidence = estimateGtfsConfidence(),
-            stopsRemaining = emptyList(),
-            nextStop = null,
-            destinationStop = null,
-        )
-    }
-
-    private fun updateArrivals() {
-        val rideState = _state.value.rideState
-        if (rideState !is RideState.WaitingAtStop) return
-        val arrivals = gtfsRtClient.arrivalsForStop(
-            stopId = rideState.stop.stopId,
-            routeId = rideState.route.routeId,
-        )
-        fsmEngine.process(RideEvent.ArrivalsUpdated(arrivals))
-        checkEtaThresholds()
-    }
-
-    private fun checkEtaThresholds() {
-        val rideState = _state.value.rideState
-        val (stopId, routeId) = when (rideState) {
-            is RideState.WaitingAtStop  ->
-                rideState.stop.stopId to rideState.route.routeId
-            is RideState.BusApproaching ->
-                rideState.stop.stopId to rideState.route.routeId
-            is RideState.BoardingWindow ->
-                rideState.stop.stopId to rideState.route.routeId
-            else -> return
-        }
-        val arrivals = gtfsRtClient.arrivalsForStop(stopId, routeId)
-        val soonest = arrivals.firstOrNull() ?: return
-        val threshold = when {
-            soonest.secsToArrival <= TransitConfig.ETA_T_BOARD_SECS   -> EtaThreshold.T_30SEC
-            soonest.secsToArrival <= TransitConfig.ETA_T_STRONG_SECS  -> EtaThreshold.T_90SEC
-            soonest.secsToArrival <= TransitConfig.ETA_T_ACTIVE_SECS  -> EtaThreshold.T_2MIN
-            soonest.secsToArrival <= TransitConfig.ETA_T_PASSIVE_SECS -> EtaThreshold.T_5MIN
-            else -> return
-        }
-        fsmEngine.process(RideEvent.EtaThresholdCrossed(soonest, soonest.secsToArrival, threshold))
-    }
-}
+                Timber.e(e, "executeDebugQuery failed: ${e.message}")
+                _state.update { it.copy(debugErrorMessage = e
+                                        
