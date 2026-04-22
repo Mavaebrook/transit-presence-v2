@@ -6,10 +6,8 @@
       "version": "17",
       "jdkDistro": "temurin"
     },
-    "ghcr.io/devcontainers/features/android-sdk:0": {
-      "version": "latest",
-      "buildToolsVersion": "34.0.0",
-      "platformVersion": "34"
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
     }
   },
   "customizations": {
@@ -17,7 +15,8 @@
       "extensions": [
         "fwcd.kotlin",
         "vscjava.vscode-gradle",
-        "mathiasfrohlich.Kotlin"
+        "mathiasfrohlich.Kotlin",
+        "vscjava.vscode-java-pack"
       ],
       "settings": {
         "java.configuration.runtimes": [
@@ -29,9 +28,11 @@
       }
     }
   },
-  "postCreateCommand": "chmod +x gradlew && echo 'sdk.dir=/usr/local/lib/android/sdk' >> local.properties",
+  "postCreateCommand": "bash .devcontainer/setup.sh",
   "remoteEnv": {
     "JAVA_HOME": "/usr/local/sdkman/candidates/java/current",
-    "ANDROID_SDK_ROOT": "/usr/local/lib/android/sdk"
+    "ANDROID_HOME": "/usr/local/android-sdk",
+    "ANDROID_SDK_ROOT": "/usr/local/android-sdk",
+    "PATH": "${PATH}:/usr/local/android-sdk/cmdline-tools/latest/bin:/usr/local/android-sdk/platform-tools"
   }
 }
