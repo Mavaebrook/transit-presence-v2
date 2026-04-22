@@ -22,14 +22,12 @@ import com.handleit.transit.feature.riding.RidingScreen
 import com.handleit.transit.feature.settings.SettingsScreen
 import com.handleit.transit.fsm.RideState
 import com.handleit.transit.ui.theme.TransitTheme
-import com.handleit.transit.feature.debug.DebugScreen
-
 
 object Nav {
     const val MAP      = "map"
     const val RIDING   = "riding"
     const val SETTINGS = "settings"
-    const val DEBUG    = "debug" // Added Debug route
+    const val DEBUG    = "debug"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -39,7 +37,6 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
         val navController = rememberNavController()
 
         NavHost(navController = navController, startDestination = Nav.MAP) {
-
             composable(Nav.MAP) {
                 val sheetState = rememberStandardBottomSheetState(
                     initialValue = SheetValue.PartiallyExpanded
@@ -113,7 +110,6 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
                             },
                         )
 
-                        // Diagnostic Button overlay
                         FloatingActionButton(
                             onClick = { navController.navigate(Nav.DEBUG) },
                             modifier = Modifier
@@ -153,7 +149,6 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
                 SettingsScreen()
             }
 
-            // --- GTFS LAB ROUTE ---
             composable(Nav.DEBUG) {
                 DebugScreen(
                     state = state,
