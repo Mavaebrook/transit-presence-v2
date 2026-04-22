@@ -36,11 +36,13 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
         NavHost(navController = navController, startDestination = Nav.MAP) {
 
             composable(Nav.MAP) {
+                // FIX: Standard bottom sheets are non-hideable by default.
+                // If you want to ensure it doesn't hide, you define the state like this:
+                val sheetState = rememberStandardBottomSheetState(
+                    initialValue = SheetValue.PartiallyExpanded
+                )
                 val scaffoldState = rememberBottomSheetScaffoldState(
-                    bottomSheetState = rememberStandardBottomSheetState(
-                        initialValue = SheetValue.PartiallyExpanded,
-                        skipHideable = true,
-                    )
+                    bottomSheetState = sheetState
                 )
 
                 BottomSheetScaffold(
@@ -58,7 +60,6 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
                         ) {}
                     },
                     sheetContent = {
-                        // Now using the mapped arrivals directly from the ViewModel's state
                         ArrivalSheetContent(
                             arrivals = state.arrivalsForUI,
                             isLoading = state.isLoadingDepartures,
