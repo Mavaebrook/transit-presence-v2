@@ -32,6 +32,16 @@ data class AppState(
     val permissionsGranted: Boolean = false,
     val transitionLog: List<TransitionLog> = emptyList(),
     val selectedStop: Stop? = null,
+
+    // UI specific states for the arrival sheet
+    val arrivalsForUI: List<UpcomingDeparture> = emptyList(),
+    val isLoadingDepartures: Boolean = false,
+    val departureErrorMessage: String? = null,
+
+    // Debug Diagnostic state
+    val debugResults: List<UpcomingDeparture> = emptyList(),
+    val isDebugLoading: Boolean = false,
+    val debugErrorMessage: String? = null
 )
 
 sealed class AppIntent {
@@ -46,7 +56,15 @@ sealed class AppIntent {
     object Reset : AppIntent()
     object ToggleMapProvider : AppIntent()
     data class StopSelected(val stop: Stop?) : AppIntent()
-    data class PromoteDepartures(val departures: List<UpcomingDeparture>) : AppIntent()
+    
+    // GTFS Diagnostic Intents
+    data class RunDebugQuery(
+        val stopId: String?, 
+        val routeNumber: String?, 
+        val time: String
+    ) : AppIntent()
+    
+    object PromoteDebugToUI : AppIntent()
 }
 
 @HiltViewModel
@@ -110,9 +128,11 @@ class AppViewModel @Inject constructor(
                 intent.stop?.let { stop -> loadRoutesForStop(stop) }
                     ?: _state.update { it.copy(routesForSelectedStop = emptyList()) }
             }
-            is AppIntent.PromoteDepartures -> {
-                // Diagnostic lab pushes results directly into upcomingDepartures
-                _state.update { it.copy(upcomingDepartures = intent.departures) }
+            is AppIntent.RunDebugQuery -> {
+                runDiagnosticQuery(intent.stopId, intent.routeNumber, intent.time)
+            }
+            is AppIntent.PromoteDebugToUI -> {
+                _state.update { it.copy(arrivalsForUI = it.debugResults) }
             }
         }
     }
@@ -194,6 +214,7 @@ class AppViewModel @Inject constructor(
     private fun loadUpcomingDepartures(pos: LatLng) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                _state.update { it.copy(isLoadingDepartures = true, departureErrorMessage = null) }
                 val now = LocalTime.now().format(timeFormatter)
                 val departures = transitDb.getUpcomingDeparturesNearby(
                     lat = pos.lat,
@@ -201,9 +222,47 @@ class AppViewModel @Inject constructor(
                     afterTime = now,
                     radiusStops = 10,
                 )
-                _state.update { it.copy(upcomingDepartures = departures) }
+                _state.update { 
+                    it.copy(
+                        upcomingDepartures = departures, 
+                        arrivalsForUI = departures,
+                        isLoadingDepartures = false 
+                    ) 
+                }
             } catch (e: Exception) {
                 Timber.e(e, "loadUpcomingDepartures failed: ${e.message}")
+                _state.update { 
+                    it.copy(
+                        isLoadingDepartures = false, 
+                        departureErrorMessage = "Failed to load arrivals" 
+                    ) 
+                }
+            }
+        }
+    }
+
+    private fun runDiagnosticQuery(stopId: String?, routeNumber: String?, time: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _state.update { it.copy(isDebugLoading = true, debugErrorMessage = null) }
+            try {
+                val lat = _state.value.userLocation?.lat ?: 28.5383 // Default to Orlando if null
+                val lng = _state.value.userLocation?.lng ?: -81.3792
+                
+                val results = transitDb.getUpcomingDeparturesNearby(
+                    lat = lat,
+                    lng = lng,
+                    afterTime = time,
+                    radiusStops = 15
+                ).filter { departure ->
+                    val stopMatch = stopId == null || departure.stopId == stopId
+                    val routeMatch = routeNumber == null || departure.routeShortName == routeNumber
+                    stopMatch && routeMatch
+                }
+                
+                _state.update { it.copy(debugResults = results, isDebugLoading = false) }
+            } catch (e: Exception) {
+                Timber.e(e, "Diagnostic query failed")
+                _state.update { it.copy(debugErrorMessage = e.message, isDebugLoading = false) }
             }
         }
     }
