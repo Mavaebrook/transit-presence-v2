@@ -1,17 +1,19 @@
 package com.handleit.transit.app
 
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import androidx.compose.foundation.layout.size
+import com.handleit.transit.feature.debug.DebugScreen
 import com.handleit.transit.feature.map.ArrivalSheetContent
 import com.handleit.transit.feature.map.MapIntent
 import com.handleit.transit.feature.map.MapScreen
@@ -25,6 +27,7 @@ object Nav {
     const val MAP      = "map"
     const val RIDING   = "riding"
     const val SETTINGS = "settings"
+    const val DEBUG    = "debug" // Added Debug route
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -36,8 +39,6 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
         NavHost(navController = navController, startDestination = Nav.MAP) {
 
             composable(Nav.MAP) {
-                // FIX: Standard bottom sheets are non-hideable by default.
-                // If you want to ensure it doesn't hide, you define the state like this:
                 val sheetState = rememberStandardBottomSheetState(
                     initialValue = SheetValue.PartiallyExpanded
                 )
@@ -78,36 +79,51 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
                         )
                     },
                 ) { paddingValues ->
-                    MapScreen(
-                        state = MapUiState(
-                            userLocation       = state.userLocation,
-                            nearbyStops        = state.nearbyStops,
-                            nearbyVehicles     = state.nearbyVehicles,
-                            selectedStop       = state.selectedStop,
-                            availableRoutes    = state.routesForSelectedStop,
-                            mapProvider        = state.mapProvider,
-                            feedStatus         = state.feedStatus,
-                            permissionsGranted = state.permissionsGranted,
-                        ),
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(paddingValues),
-                        onIntent = { intent ->
-                            when (intent) {
-                                is MapIntent.ToggleMapProvider ->
-                                    onIntent(AppIntent.ToggleMapProvider)
-                                is MapIntent.StopSelected ->
-                                    onIntent(AppIntent.StopSelected(intent.stop))
-                                is MapIntent.DismissStop ->
-                                    onIntent(AppIntent.StopSelected(null))
-                                else -> {}
-                            }
-                        },
-                        onRouteSelected = { route, stop, dest ->
-                            onIntent(AppIntent.RouteSelected(route, stop, dest))
-                            navController.navigate(Nav.RIDING)
-                        },
-                    )
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        MapScreen(
+                            state = MapUiState(
+                                userLocation       = state.userLocation,
+                                nearbyStops        = state.nearbyStops,
+                                nearbyVehicles     = state.nearbyVehicles,
+                                selectedStop       = state.selectedStop,
+                                availableRoutes    = state.routesForSelectedStop,
+                                mapProvider        = state.mapProvider,
+                                feedStatus         = state.feedStatus,
+                                permissionsGranted = state.permissionsGranted,
+                            ),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(paddingValues),
+                            onIntent = { intent ->
+                                when (intent) {
+                                    is MapIntent.ToggleMapProvider ->
+                                        onIntent(AppIntent.ToggleMapProvider)
+                                    is MapIntent.StopSelected ->
+                                        onIntent(AppIntent.StopSelected(intent.stop))
+                                    is MapIntent.DismissStop ->
+                                        onIntent(AppIntent.StopSelected(null))
+                                    else -> {}
+                                }
+                            },
+                            onRouteSelected = { route, stop, dest ->
+                                onIntent(AppIntent.RouteSelected(route, stop, dest))
+                                navController.navigate(Nav.RIDING)
+                            },
+                        )
+
+                        // Diagnostic Button overlay
+                        FloatingActionButton(
+                            onClick = { navController.navigate(Nav.DEBUG) },
+                            modifier = Modifier
+                                .padding(paddingValues)
+                                .padding(16.dp)
+                                .align(Alignment.TopEnd),
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                        ) {
+                            Icon(Icons.Default.Build, contentDescription = "Open GTFS Lab")
+                        }
+                    }
                 }
             }
 
@@ -133,6 +149,15 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
 
             composable(Nav.SETTINGS) {
                 SettingsScreen()
+            }
+
+            // --- GTFS LAB ROUTE ---
+            composable(Nav.DEBUG) {
+                DebugScreen(
+                    state = state,
+                    onIntent = onIntent,
+                    onBack = { navController.popBackStack() }
+                )
             }
         }
     }
