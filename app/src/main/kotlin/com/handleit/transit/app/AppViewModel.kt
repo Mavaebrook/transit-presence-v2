@@ -293,5 +293,51 @@ class AppViewModel @Inject constructor(
         val userPos = _state.value.userLocation ?: return null
         val vehicle = gtfsRtClient.vehicles.value
             .minByOrNull { v ->
-                locationModule.haversineMeters(userPos,
-                                               
+                locationModule.haversineMeters(userPos, LatLng(v.lat, v.lng))
+            } ?: return null
+        return TripCandidate(
+            trip = Trip(vehicle.tripId ?: "", state.route.routeId, ""),
+            route = state.route,
+            vehicle = vehicle,
+            routeAlignmentScore = 0.8f,
+            gtfsConfidence = estimateGtfsConfidence(),
+            stopsRemaining = emptyList(),
+            nextStop = null,
+            destinationStop = null,
+        )
+    }
+
+    private fun updateArrivals() {
+        val rideState = _state.value.rideState
+        if (rideState !is RideState.WaitingAtStop) return
+        val arrivals = gtfsRtClient.arrivalsForStop(
+            stopId = rideState.stop.stopId,
+            routeId = rideState.route.routeId,
+        )
+        fsmEngine.process(RideEvent.ArrivalsUpdated(arrivals))
+        checkEtaThresholds()
+    }
+
+    private fun checkEtaThresholds() {
+        val rideState = _state.value.rideState
+        val (stopId, routeId) = when (rideState) {
+            is RideState.WaitingAtStop  ->
+                rideState.stop.stopId to rideState.route.routeId
+            is RideState.BusApproaching ->
+                rideState.stop.stopId to rideState.route.routeId
+            is RideState.BoardingWindow ->
+                rideState.stop.stopId to rideState.route.routeId
+            else -> return
+        }
+        val arrivals = gtfsRtClient.arrivalsForStop(stopId, routeId)
+        val soonest = arrivals.firstOrNull() ?: return
+        val threshold = when {
+            soonest.secsToArrival <= TransitConfig.ETA_T_BOARD_SECS   -> EtaThreshold.T_30SEC
+            soonest.secsToArrival <= TransitConfig.ETA_T_STRONG_SECS  -> EtaThreshold.T_90SEC
+            soonest.secsToArrival <= TransitConfig.ETA_T_ACTIVE_SECS  -> EtaThreshold.T_2MIN
+            soonest.secsToArrival <= TransitConfig.ETA_T_PASSIVE_SECS -> EtaThreshold.T_5MIN
+            else -> return
+        }
+        fsmEngine.process(RideEvent.EtaThresholdCrossed(soonest, soonest.secsToArrival, threshold))
+    }
+}
