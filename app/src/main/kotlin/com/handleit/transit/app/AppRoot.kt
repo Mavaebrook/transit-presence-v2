@@ -1,4 +1,4 @@
-package com.handleit.transit.ui
+package com.handleit.transit.app
 
 import android.graphics.Color as AndroidColor
 import androidx.compose.foundation.background
@@ -22,9 +22,6 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-
-import com.handleit.transit.app.AppState
-import com.handleit.transit.app.AppIntent
 
 import com.handleit.transit.feature.map.ArrivalSheetContent
 import com.handleit.transit.feature.map.MapIntent
@@ -81,8 +78,7 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
                             isLoading = state.isLoadingDepartures,
                             errorMessage = state.departureErrorMessage,
                             onRouteClicked = { arrival ->
-                                val targetStop = state.nearbyStops.firstOrNull()
-                                if (targetStop != null) {
+                                state.nearbyStops.firstOrNull()?.let { targetStop ->
                                     onIntent(
                                         AppIntent.RouteSelected(
                                             route = arrival.route,
@@ -268,8 +264,8 @@ fun DebugScreen(
                 }
             }
 
-            state.debugErrorMessage?.let {
-                Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(vertical = 8.dp))
+            state.debugErrorMessage?.let { message ->
+                Text(message, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(vertical = 8.dp))
             }
 
             Spacer(modifier = Modifier.height(8.dp))
