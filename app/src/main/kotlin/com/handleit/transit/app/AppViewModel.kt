@@ -132,11 +132,13 @@ class AppViewModel @Inject constructor(
                 runDiagnosticQuery(intent.stopId, intent.routeNumber, intent.time)
             }
             is AppIntent.PromoteDebugToUI -> {
-                _state.update { it.copy(arrivalsForUI = it.debugResults) }
-            }
+    _state.update { 
+        it.copy(
+            upcomingDepartures = it.debugResults,
+            arrivalsForUI = it.debugResults,
+            ) 
         }
-    }
-
+     }
     private fun observeFsmState() {
         fsmEngine.state
             .onEach { rideState -> _state.update { it.copy(rideState = rideState) } }
