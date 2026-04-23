@@ -68,6 +68,7 @@ dependencies {
     // --- FIX: Missing DI types for AppModule ---
     // Location Services (Provides FusedLocationProviderClient)
     implementation("com.google.android.gms:play-services-location:21.2.0")
+    implementation(project(":feature:feature-debug"))
 
     // Networking (Provides OkHttpClient & Logging)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
