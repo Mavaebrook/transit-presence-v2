@@ -264,8 +264,14 @@ fun DebugScreen(
                 }
             }
 
-            state.debugErrorMessage?.let { message ->
-                Text(message, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(vertical = 8.dp))
+            // CRITICAL FIX: Removed .let{} to fix Composable context error
+            val error = state.debugErrorMessage
+            if (error != null) {
+                Text(
+                    text = error,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -275,7 +281,11 @@ fun DebugScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(bottom = 24.dp)
             ) {
-                items(state.debugResults) { departure ->
+                // CRITICAL FIX: Explicitly typed the lambda to prevent 'Int' mismatch
+                items(
+                    items = state.debugResults,
+                    key = { it.tripId + it.stopId + it.departureTime }
+                ) { departure: UpcomingDeparture ->
                     DebugResultItem(departure)
                 }
             }
