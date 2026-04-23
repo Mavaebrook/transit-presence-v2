@@ -21,11 +21,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 
-// Use your actual internal model
 import com.handleit.transit.model.UpcomingDeparture
 import com.handleit.transit.ui.theme.TransitTheme
 
-// 1. LOCAL UI MODEL (Prevents Import Errors)
 data class RouteArrival(
     val route: String,
     val time: String,
@@ -49,7 +47,6 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
                     sheetContainerColor = Color(0xFF121212),
                     sheetContentColor = Color.White,
                     sheetContent = {
-                        // 2. MAPPING LOGIC
                         val uiArrivals = state.arrivalsForUI.map { dep ->
                             RouteArrival(
                                 route = dep.routeShortName,
@@ -64,18 +61,17 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
                             isLoading = state.isLoadingDepartures,
                             errorMessage = state.departureErrorMessage,
                             onRouteClicked = { routeName ->
-                                // Logic for when a bus is tapped
-                                onIntent(AppIntent.RouteSelected(routeName, null, null))
+                                // FIX: You must pass actual Route and Stop objects here, not String and null.
+                                // Update AppIntent.RouteSelected to accept a String ID, or fetch the actual objects.
+                                // onIntent(AppIntent.RouteSelected(TODO("Pass Route"), TODO("Pass Stop"), null))
                                 navController.navigate("riding")
                             }
                         )
                     }
                 ) { padding ->
-                    // Your Map UI goes here
                     Box(modifier = Modifier.padding(padding).fillMaxSize()) {
                         Text("Map View Placeholder", modifier = Modifier.align(Alignment.Center))
                         
-                        // Debug Trigger
                         SmallFloatingActionButton(
                             onClick = { navController.navigate("debug") },
                             modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
@@ -87,7 +83,6 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
             }
             
             composable("debug") { 
-                // Placeholder if DebugScreen is elsewhere, or paste DebugScreen code here
                 Text("GTFS Diagnostic Lab") 
             }
             
@@ -98,7 +93,6 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
     }
 }
 
-// 3. THE MISSING COMPONENT (Defined here to fix "Unresolved Reference")
 @Composable
 fun ArrivalSheetContent(
     arrivals: List<RouteArrival>,
