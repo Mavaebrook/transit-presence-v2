@@ -32,16 +32,12 @@ data class AppState(
     val permissionsGranted: Boolean = false,
     val transitionLog: List<TransitionLog> = emptyList(),
     val selectedStop: Stop? = null,
-
-    // UI specific states for the arrival sheet
     val arrivalsForUI: List<UpcomingDeparture> = emptyList(),
     val isLoadingDepartures: Boolean = false,
     val departureErrorMessage: String? = null,
-
-    // Debug Diagnostic state
     val debugResults: List<UpcomingDeparture> = emptyList(),
     val isDebugLoading: Boolean = false,
-    val debugErrorMessage: String? = null
+    val debugErrorMessage: String? = null,
 )
 
 sealed class AppIntent {
@@ -56,14 +52,11 @@ sealed class AppIntent {
     object Reset : AppIntent()
     object ToggleMapProvider : AppIntent()
     data class StopSelected(val stop: Stop?) : AppIntent()
-    
-    // GTFS Diagnostic Intents
     data class RunDebugQuery(
-        val stopId: String?, 
-        val routeNumber: String?, 
-        val time: String
+        val stopId: String?,
+        val routeNumber: String?,
+        val time: String,
     ) : AppIntent()
-    
     object PromoteDebugToUI : AppIntent()
 }
 
@@ -128,17 +121,18 @@ class AppViewModel @Inject constructor(
                 intent.stop?.let { stop -> loadRoutesForStop(stop) }
                     ?: _state.update { it.copy(routesForSelectedStop = emptyList()) }
             }
-            is AppIntent.RunDebugQuery -> {
+            is AppIntent.RunDebugQuery ->
                 runDiagnosticQuery(intent.stopId, intent.routeNumber, intent.time)
-            }
-            is AppIntent.PromoteDebugToUI -> {
-    _state.update { 
-        it.copy(
-            upcomingDepartures = it.debugResults,
-            arrivalsForUI = it.debugResults,
-            ) 
+            is AppIntent.PromoteDebugToUI ->
+                _state.update {
+                    it.copy(
+                        upcomingDepartures = it.debugResults,
+                        arrivalsForUI = it.debugResults,
+                    )
+                }
         }
-     }
+    }
+
     private fun observeFsmState() {
         fsmEngine.state
             .onEach { rideState -> _state.update { it.copy(rideState = rideState) } }
@@ -224,53 +218,53 @@ class AppViewModel @Inject constructor(
                     afterTime = now,
                     radiusStops = 10,
                 )
-                _state.update { 
+                _state.update {
                     it.copy(
-                        upcomingDepartures = departures, 
+                        upcomingDepartures = departures,
                         arrivalsForUI = departures,
-                        isLoadingDepartures = false 
-                    ) 
+                        isLoadingDepartures = false,
+                    )
                 }
             } catch (e: Exception) {
                 Timber.e(e, "loadUpcomingDepartures failed: ${e.message}")
-                _state.update { 
+                _state.update {
                     it.copy(
-                        isLoadingDepartures = false, 
-                        departureErrorMessage = "Failed to load arrivals" 
-                    ) 
+                        isLoadingDepartures = false,
+                        departureErrorMessage = "Failed to load arrivals",
+                    )
                 }
             }
         }
     }
 
     private fun runDiagnosticQuery(stopId: String?, routeNumber: String?, time: String) {
-    private fun runDiagnosticQuery(stopId: String?, routeNumber: String?, time: String) {
-    viewModelScope.launch(Dispatchers.IO) {
-        _state.update { it.copy(isDebugLoading = true, debugErrorMessage = null) }
-        try {
-            val results = transitDb.getDebugData(
-                stopId = stopId?.trim()?.ifBlank { null },
-                routeShortName = routeNumber?.trim()?.ifBlank { null },
-                startTime = time.trim().ifBlank { null },
-            )
-            _state.update {
-                it.copy(
-                    debugResults = results,
-                    isDebugLoading = false,
-                    debugErrorMessage = if (results.isEmpty()) "No results found" else null
+        viewModelScope.launch(Dispatchers.IO) {
+            _state.update { it.copy(isDebugLoading = true, debugErrorMessage = null) }
+            try {
+                val results = transitDb.getDebugData(
+                    stopId = stopId?.trim()?.ifBlank { null },
+                    routeShortName = routeNumber?.trim()?.ifBlank { null },
+                    startTime = time.trim().ifBlank { null },
                 )
-            }
-        } catch (e: Exception) {
-            Timber.e(e, "Diagnostic query failed")
-            _state.update {
-                it.copy(
-                    debugErrorMessage = "Query failed: ${e.message}",
-                    isDebugLoading = false
-                )
+                _state.update {
+                    it.copy(
+                        debugResults = results,
+                        isDebugLoading = false,
+                        debugErrorMessage = if (results.isEmpty()) "No results found" else null,
+                    )
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Diagnostic query failed")
+                _state.update {
+                    it.copy(
+                        debugErrorMessage = "Query failed: ${e.message}",
+                        isDebugLoading = false,
+                    )
+                }
             }
         }
     }
-    }
+
     private fun runFusionIfNeeded(snapshot: LocationSnapshot) {
         val rideState = _state.value.rideState
         if (rideState !is RideState.BoardingWindow &&
@@ -360,3 +354,4 @@ class AppViewModel @Inject constructor(
         fsmEngine.process(RideEvent.EtaThresholdCrossed(soonest, soonest.secsToArrival, threshold))
     }
 }
+```
