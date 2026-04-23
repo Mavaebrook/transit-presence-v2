@@ -1,35 +1,36 @@
 package com.handleit.transit.app
 
-import android.graphics.Color as AndroidColor
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-
-import com.handleit.transit.model.UpcomingDeparture
+import com.handleit.transit.feature.debug.DebugScreen
+import com.handleit.transit.feature.map.ArrivalSheetContent
+import com.handleit.transit.feature.map.MapIntent
+import com.handleit.transit.feature.map.MapScreen
+import com.handleit.transit.feature.map.MapUiState
+import com.handleit.transit.feature.map.RouteArrival
+import com.handleit.transit.feature.riding.RidingScreen
+import com.handleit.transit.feature.settings.SettingsScreen
+import com.handleit.transit.fsm.RideState
+import com.handleit.transit.model.Route
 import com.handleit.transit.ui.theme.TransitTheme
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 
-data class RouteArrival(
-    val route: String,
-    val time: String,
-    val headsign: String,
-    val color: String
-)
+object Nav {
+    const val MAP      = "map"
+    const val RIDING   = "riding"
+    const val SETTINGS = "settings"
+    const val DEBUG    = "debug"
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,126 +38,150 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
     TransitTheme {
         val navController = rememberNavController()
 
-        NavHost(navController = navController, startDestination = "map") {
-            composable("map") {
-                val scaffoldState = rememberBottomSheetScaffoldState()
+        NavHost(navController = navController, startDestination = Nav.MAP) {
+
+            composable(Nav.MAP) {
+                val scaffoldState = rememberBottomSheetScaffoldState(
+                    bottomSheetState = rememberStandardBottomSheetState(
+                        initialValue = SheetValue.PartiallyExpanded,
+                        skipHideable = true,
+                    )
+                )
+
+                val timeFormatter = remember { DateTimeFormatter.ofPattern("HH:mm:ss") }
+                val arrivals = remember(state.upcomingDepartures) {
+                    val now = LocalTime.now()
+                    state.upcomingDepartures.mapNotNull { departure ->
+                        val route = Route(
+                            routeId = departure.routeId,
+                            routeShortName = departure.routeShortName,
+                            routeLongName = departure.routeLongName,
+                            routeType = 3,
+                            routeColor = departure.routeColor,
+                            routeTextColor = departure.routeTextColor,
+                        )
+                        val etaMinutes = try {
+                            val depTime = LocalTime.parse(
+                                departure.departureTime.let { t ->
+                                    val parts = t.split(":")
+                                    val h = parts[0].toInt() % 24
+                                    "%02d:%s:%s".format(h, parts[1], parts[2])
+                                },
+                                timeFormatter
+                            )
+                            val diff = java.time.Duration.between(now, depTime).toMinutes()
+                            if (diff < 0) return@mapNotNull null
+                            diff.toInt()
+                        } catch (e: Exception) {
+                            null
+                        }
+                        RouteArrival(
+                            route = route,
+                            headsign = departure.headsign.ifBlank { departure.routeLongName },
+                            nearestStopName = departure.stopName,
+                            etaMinutes = etaMinutes,
+                            isRealtime = false,
+                            directionId = departure.directionId,
+                        )
+                    }.distinctBy { "${it.route.routeId}-${it.directionId}" }
+                        .sortedBy { it.etaMinutes ?: Int.MAX_VALUE }
+                }
 
                 BottomSheetScaffold(
                     scaffoldState = scaffoldState,
                     sheetPeekHeight = 200.dp,
-                    sheetContainerColor = Color(0xFF121212),
+                    sheetContainerColor = Color(0xFF1A0A2E),
                     sheetContentColor = Color.White,
+                    sheetDragHandle = {
+                        Surface(
+                            modifier = Modifier
+                                .padding(vertical = 8.dp)
+                                .size(width = 36.dp, height = 4.dp),
+                            shape = RoundedCornerShape(2.dp),
+                            color = Color.White.copy(alpha = 0.3f),
+                        ) {}
+                    },
                     sheetContent = {
-                        val uiArrivals = state.arrivalsForUI.map { dep ->
-                            RouteArrival(
-                                route = dep.routeShortName,
-                                time = dep.departureTime,
-                                headsign = dep.headsign,
-                                color = dep.routeColor
-                            )
-                        }
-
                         ArrivalSheetContent(
-                            arrivals = uiArrivals,
-                            isLoading = state.isLoadingDepartures,
-                            errorMessage = state.departureErrorMessage,
-                            onRouteClicked = { routeName ->
-                                // FIX: You must pass actual Route and Stop objects here, not String and null.
-                                // Update AppIntent.RouteSelected to accept a String ID, or fetch the actual objects.
-                                // onIntent(AppIntent.RouteSelected(TODO("Pass Route"), TODO("Pass Stop"), null))
-                                navController.navigate("riding")
+                            arrivals = arrivals,
+                            onRouteClicked = { arrival ->
+                                onIntent(
+                                    AppIntent.RouteSelected(
+                                        route = arrival.route,
+                                        stop = state.nearbyStops.firstOrNull()
+                                            ?: return@ArrivalSheetContent,
+                                        destination = null,
+                                    )
+                                )
+                                navController.navigate(Nav.RIDING)
                             }
                         )
-                    }
-                ) { padding ->
-                    Box(modifier = Modifier.padding(padding).fillMaxSize()) {
-                        Text("Map View Placeholder", modifier = Modifier.align(Alignment.Center))
-                        
-                        SmallFloatingActionButton(
-                            onClick = { navController.navigate("debug") },
-                            modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
-                        ) {
-                            Icon(Icons.Default.Build, "Debug")
-                        }
-                    }
+                    },
+                ) { paddingValues ->
+                    MapScreen(
+                        state = MapUiState(
+                            userLocation       = state.userLocation,
+                            nearbyStops        = state.nearbyStops,
+                            nearbyVehicles     = state.nearbyVehicles,
+                            selectedStop       = state.selectedStop,
+                            availableRoutes    = state.routesForSelectedStop,
+                            mapProvider        = state.mapProvider,
+                            feedStatus         = state.feedStatus,
+                            permissionsGranted = state.permissionsGranted,
+                        ),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(paddingValues),
+                        onIntent = { intent ->
+                            when (intent) {
+                                is MapIntent.ToggleMapProvider ->
+                                    onIntent(AppIntent.ToggleMapProvider)
+                                is MapIntent.StopSelected ->
+                                    onIntent(AppIntent.StopSelected(intent.stop))
+                                is MapIntent.DismissStop ->
+                                    onIntent(AppIntent.StopSelected(null))
+                                else -> {}
+                            }
+                        },
+                        onRouteSelected = { route, stop, dest ->
+                            onIntent(AppIntent.RouteSelected(route, stop, dest))
+                            navController.navigate(Nav.RIDING)
+                        },
+                    )
                 }
             }
-            
-            composable("debug") { 
-                Text("GTFS Diagnostic Lab") 
-            }
-            
-            composable("riding") { 
-                Text("Riding Dashboard")
-            }
-        }
-    }
-}
 
-@Composable
-fun ArrivalSheetContent(
-    arrivals: List<RouteArrival>,
-    isLoading: Boolean,
-    errorMessage: String?,
-    onRouteClicked: (String) -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp)
-            .heightIn(min = 200.dp)
-    ) {
-        Text(
-            "Upcoming Departures", 
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold
-        )
-        
-        Spacer(Modifier.height(12.dp))
-
-        if (isLoading) {
-            CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
-        } else if (errorMessage != null) {
-            Text("Error: $errorMessage", color = MaterialTheme.colorScheme.error)
-        } else if (arrivals.isEmpty()) {
-            Text("No upcoming buses nearby.", color = Color.Gray)
-        } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(arrivals) { arrival ->
-                    ArrivalCard(arrival, onRouteClicked)
+            composable(Nav.RIDING) {
+                if (state.rideState is RideState.Idle) {
+                    navController.popBackStack()
+                } else {
+                    RidingScreen(
+                        state             = state.rideState,
+                        onConfirmBoarding = { onIntent(AppIntent.ConfirmBoarding) },
+                        onConfirmExit     = { onIntent(AppIntent.ConfirmExit) },
+                        onDismissTrip     = {
+                            onIntent(AppIntent.DismissTrip)
+                            navController.popBackStack()
+                        },
+                        onReset           = {
+                            onIntent(AppIntent.Reset)
+                            navController.popBackStack()
+                        },
+                    )
                 }
             }
-        }
-    }
-}
 
-@Composable
-fun ArrivalCard(arrival: RouteArrival, onClick: (String) -> Unit) {
-    val busColor = try { Color(AndroidColor.parseColor("#${arrival.color}")) } catch (e: Exception) { Color.DarkGray }
-    
-    Card(
-        modifier = Modifier.fillMaxWidth().clickable { onClick(arrival.route) },
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E))
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                color = busColor,
-                shape = RoundedCornerShape(4.dp),
-                modifier = Modifier.size(width = 50.dp, height = 30.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(arrival.route, color = Color.White, fontWeight = FontWeight.Bold)
-                }
+            composable(Nav.SETTINGS) {
+                SettingsScreen()
             }
-            Spacer(Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(arrival.headsign, style = MaterialTheme.typography.bodyMedium, color = Color.White)
-                Text(arrival.time, style = MaterialTheme.typography.labelSmall, color = Color.LightGray)
+
+            composable(Nav.DEBUG) {
+                DebugScreen(
+                    state = state,
+                    onIntent = onIntent,
+                    onBack = { navController.popBackStack() }
+                )
             }
-            Icon(Icons.Default.KeyboardArrowRight, contentDescription = null, tint = Color.Gray)
         }
     }
 }
