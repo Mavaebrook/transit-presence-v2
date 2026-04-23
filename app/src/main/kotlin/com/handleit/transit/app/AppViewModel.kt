@@ -242,31 +242,33 @@ class AppViewModel @Inject constructor(
     }
 
     private fun runDiagnosticQuery(stopId: String?, routeNumber: String?, time: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            _state.update { it.copy(isDebugLoading = true, debugErrorMessage = null) }
-            try {
-                val lat = _state.value.userLocation?.lat ?: 28.5383 // Default to Orlando
-                val lng = _state.value.userLocation?.lng ?: -81.3792
-                
-                val results = transitDb.getUpcomingDeparturesNearby(
-                    lat = lat,
-                    lng = lng,
-                    afterTime = time,
-                    radiusStops = 15
-                ).filter { departure ->
-                    val stopMatch = stopId == null || departure.stopId == stopId
-                    val routeMatch = routeNumber == null || departure.routeShortName == routeNumber
-                    stopMatch && routeMatch
-                }
-                
-                _state.update { it.copy(debugResults = results, isDebugLoading = false) }
-            } catch (e: Exception) {
-                Timber.e(e, "Diagnostic query failed")
-                _state.update { it.copy(debugErrorMessage = e.message, isDebugLoading = false) }
+    private fun runDiagnosticQuery(stopId: String?, routeNumber: String?, time: String) {
+    viewModelScope.launch(Dispatchers.IO) {
+        _state.update { it.copy(isDebugLoading = true, debugErrorMessage = null) }
+        try {
+            val results = transitDb.getDebugData(
+                stopId = stopId?.trim()?.ifBlank { null },
+                routeShortName = routeNumber?.trim()?.ifBlank { null },
+                startTime = time.trim().ifBlank { null },
+            )
+            _state.update {
+                it.copy(
+                    debugResults = results,
+                    isDebugLoading = false,
+                    debugErrorMessage = if (results.isEmpty()) "No results found" else null
+                )
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Diagnostic query failed")
+            _state.update {
+                it.copy(
+                    debugErrorMessage = "Query failed: ${e.message}",
+                    isDebugLoading = false
+                )
             }
         }
     }
-
+    }
     private fun runFusionIfNeeded(snapshot: LocationSnapshot) {
         val rideState = _state.value.rideState
         if (rideState !is RideState.BoardingWindow &&
