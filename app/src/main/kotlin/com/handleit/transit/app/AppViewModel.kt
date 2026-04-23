@@ -245,7 +245,7 @@ class AppViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             _state.update { it.copy(isDebugLoading = true, debugErrorMessage = null) }
             try {
-                val lat = _state.value.userLocation?.lat ?: 28.5383 // Default to Orlando if null
+                val lat = _state.value.userLocation?.lat ?: 28.5383 // Default to Orlando
                 val lng = _state.value.userLocation?.lng ?: -81.3792
                 
                 val results = transitDb.getUpcomingDeparturesNearby(
