@@ -354,4 +354,3 @@ class AppViewModel @Inject constructor(
         fsmEngine.process(RideEvent.EtaThresholdCrossed(soonest, soonest.secsToArrival, threshold))
     }
 }
-```
