@@ -1,7 +1,9 @@
 package com.handleit.transit.app
 
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -11,7 +13,6 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.handleit.transit.feature.debug.DebugScreen
 import com.handleit.transit.feature.map.ArrivalSheetContent
 import com.handleit.transit.feature.map.MapIntent
 import com.handleit.transit.feature.map.MapScreen
@@ -44,7 +45,6 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
                 val scaffoldState = rememberBottomSheetScaffoldState(
                     bottomSheetState = rememberStandardBottomSheetState(
                         initialValue = SheetValue.PartiallyExpanded,
-                        skipHideable = true,
                     )
                 )
 
@@ -96,7 +96,8 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
                         Surface(
                             modifier = Modifier
                                 .padding(vertical = 8.dp)
-                                .size(width = 36.dp, height = 4.dp),
+                                .width(36.dp)
+                                .height(4.dp),
                             shape = RoundedCornerShape(2.dp),
                             color = Color.White.copy(alpha = 0.3f),
                         ) {}
