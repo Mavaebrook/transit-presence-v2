@@ -23,12 +23,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 
-// Logic Imports (States & Intents)
 import com.handleit.transit.app.AppState
 import com.handleit.transit.app.AppIntent
-import com.handleit.transit.app.AppViewModel
 
-// Feature Imports
 import com.handleit.transit.feature.map.ArrivalSheetContent
 import com.handleit.transit.feature.map.MapIntent
 import com.handleit.transit.feature.map.MapScreen
@@ -39,7 +36,6 @@ import com.handleit.transit.fsm.RideState
 import com.handleit.transit.model.UpcomingDeparture
 import com.handleit.transit.ui.theme.TransitTheme
 
-// Utility Imports
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
@@ -85,15 +81,17 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
                             isLoading = state.isLoadingDepartures,
                             errorMessage = state.departureErrorMessage,
                             onRouteClicked = { arrival ->
-                                onIntent(
-                                    AppIntent.RouteSelected(
-                                        route = arrival.route,
-                                        stop = state.nearbyStops.firstOrNull()
-                                            ?: return@onRouteClicked, // Corrected label
-                                        destination = null,
+                                val targetStop = state.nearbyStops.firstOrNull()
+                                if (targetStop != null) {
+                                    onIntent(
+                                        AppIntent.RouteSelected(
+                                            route = arrival.route,
+                                            stop = targetStop,
+                                            destination = null,
+                                        )
                                     )
-                                )
-                                navController.navigate(Nav.RIDING)
+                                    navController.navigate(Nav.RIDING)
+                                }
                             }
                         )
                     },
@@ -291,7 +289,6 @@ fun DebugScreen(
 
 @Composable
 fun DebugResultItem(dep: UpcomingDeparture) {
-    // Alias used here to resolve android.graphics.Color
     val routeColor = try { 
         Color(AndroidColor.parseColor("#${dep.routeColor}")) 
     } catch (e: Exception) { 
