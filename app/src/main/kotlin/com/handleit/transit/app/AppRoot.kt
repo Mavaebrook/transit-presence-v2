@@ -22,12 +22,12 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 
-// Logic Imports
+// Logic Imports (Crucial for resolving AppState/AppIntent)
 import com.handleit.transit.app.AppState
 import com.handleit.transit.app.AppIntent
 import com.handleit.transit.app.AppViewModel
 
-// Feature Imports
+// Feature and Model Imports
 import com.handleit.transit.feature.map.ArrivalSheetContent
 import com.handleit.transit.feature.map.MapIntent
 import com.handleit.transit.feature.map.MapScreen
@@ -37,8 +37,11 @@ import com.handleit.transit.feature.settings.SettingsScreen
 import com.handleit.transit.fsm.RideState
 import com.handleit.transit.model.UpcomingDeparture
 import com.handleit.transit.ui.theme.TransitTheme
+
+// Utility Imports
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import android.graphics.Color as AndroidColor // Needed for parseColor
 
 object Nav {
     const val MAP      = "map"
@@ -288,7 +291,13 @@ fun DebugScreen(
 
 @Composable
 fun DebugResultItem(dep: UpcomingDeparture) {
-    val routeColor = try { Color(android.graphics.Color.parseColor("#${dep.routeColor}")) } catch (e: Exception) { MaterialTheme.colorScheme.surfaceVariant }
+    // Uses AndroidColor alias to avoid confusion with Compose Color
+    val routeColor = try { 
+        Color(AndroidColor.parseColor("#${dep.routeColor}")) 
+    } catch (e: Exception) { 
+        MaterialTheme.colorScheme.surfaceVariant 
+    }
+    
     Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
         Row(modifier = Modifier.height(IntrinsicSize.Min)) {
             Box(modifier = Modifier.fillMaxHeight().width(6.dp).background(routeColor))
