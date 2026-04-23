@@ -98,5 +98,5 @@ dependencies {
     // Logging
     implementation(libs.timber)
 
-    debugImplementation(libs.compose.ui.toog)
+    debugImplementation(libs.compose.ui.tooling)
 }
