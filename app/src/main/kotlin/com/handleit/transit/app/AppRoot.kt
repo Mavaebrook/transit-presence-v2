@@ -1,4 +1,4 @@
-package com.handleit.transit.app
+package com.handleit.transit.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -21,6 +21,13 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+
+// Logic Imports
+import com.handleit.transit.app.AppState
+import com.handleit.transit.app.AppIntent
+import com.handleit.transit.app.AppViewModel
+
+// Feature Imports
 import com.handleit.transit.feature.map.ArrivalSheetContent
 import com.handleit.transit.feature.map.MapIntent
 import com.handleit.transit.feature.map.MapScreen
@@ -169,7 +176,6 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
         }
     }
 }
-// ... Existing AppRoot code above ...
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
