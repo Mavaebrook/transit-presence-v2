@@ -1,5 +1,6 @@
 package com.handleit.transit.ui
 
+import android.graphics.Color as AndroidColor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,12 +23,12 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 
-// Logic Imports (Crucial for resolving AppState/AppIntent)
+// Logic Imports (States & Intents)
 import com.handleit.transit.app.AppState
 import com.handleit.transit.app.AppIntent
 import com.handleit.transit.app.AppViewModel
 
-// Feature and Model Imports
+// Feature Imports
 import com.handleit.transit.feature.map.ArrivalSheetContent
 import com.handleit.transit.feature.map.MapIntent
 import com.handleit.transit.feature.map.MapScreen
@@ -41,7 +42,6 @@ import com.handleit.transit.ui.theme.TransitTheme
 // Utility Imports
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
-import android.graphics.Color as AndroidColor // Needed for parseColor
 
 object Nav {
     const val MAP      = "map"
@@ -89,7 +89,7 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
                                     AppIntent.RouteSelected(
                                         route = arrival.route,
                                         stop = state.nearbyStops.firstOrNull()
-                                            ?: return@ArrivalSheetContent,
+                                            ?: return@onRouteClicked, // Corrected label
                                         destination = null,
                                     )
                                 )
@@ -291,13 +291,12 @@ fun DebugScreen(
 
 @Composable
 fun DebugResultItem(dep: UpcomingDeparture) {
-    // Uses AndroidColor alias to avoid confusion with Compose Color
+    // Alias used here to resolve android.graphics.Color
     val routeColor = try { 
         Color(AndroidColor.parseColor("#${dep.routeColor}")) 
     } catch (e: Exception) { 
         MaterialTheme.colorScheme.surfaceVariant 
     }
-    
     Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
         Row(modifier = Modifier.height(IntrinsicSize.Min)) {
             Box(modifier = Modifier.fillMaxHeight().width(6.dp).background(routeColor))
