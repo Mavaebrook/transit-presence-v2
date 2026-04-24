@@ -320,8 +320,8 @@ class TransitDb @Inject constructor(
             Timber.d("getUpcomingDeparturesNearby: Querying between $normalizedTime and $twoHoursLater on $dayOfWeek")
 
             // Step 2 — get all departures for those stops within next 2 hours
-            // We strip the day-of-week and time filters from SQL to ensure we get data,
-            // then we handle the filtering in Kotlin to be 100% sure about the logic.
+            // We use the substr('0' || ..., -8) trick to ensure HH:MM:SS comparison works
+            // even if leading zeros are missing in the DB.
             val allDepartures = getDb().rawQuery(
                 """
                 SELECT
@@ -332,27 +332,20 @@ class TransitDb @Inject constructor(
                 INNER JOIN routes r ON r.routeId = t.routeId
                 INNER JOIN stops s ON s.stopId = st.stopId
                 WHERE TRIM(st.stopId) IN (${nearbyStopIds.joinToString(",") { "'${it.trim()}'" }})
-                ORDER BY st.departureTime ASC
+                AND substr('0' || TRIM(st.departureTime), -8) >= ?
+                AND substr('0' || TRIM(st.departureTime), -8) <= ?
+                ORDER BY substr('0' || TRIM(st.departureTime), -8) ASC
                 """.trimIndent(),
-                null,
+                arrayOf(normalizedTime, twoHoursLater),
             ).use { cursor ->
                 val results = mutableListOf<UpcomingDeparture>()
-                if (cursor.moveToFirst()) {
-                    Timber.d("getUpcomingDeparturesNearby: Found ${cursor.count} raw rows in join query")
-                    Timber.d("getUpcomingDeparturesNearby: First raw departureTime in result: '${cursor.getString(7)}' for stop ${cursor.getString(10)}")
-                    cursor.moveToPosition(-1)
-                }
                 while (cursor.moveToNext()) {
-                    val dep = cursor.toUpcomingDeparture()
-                    // Filter by time in Kotlin (much safer than SQL string comparison)
-                    if (isTimeBetween(dep.departureTime, normalizedTime, twoHoursLater)) {
-                        results.add(dep)
-                    }
+                    results.add(cursor.toUpcomingDeparture())
                 }
                 results
             }
 
-            Timber.d("getUpcomingDeparturesNearby: Found ${allDepartures.size} filtered departures")
+            Timber.d("getUpcomingDeparturesNearby: Found ${allDepartures.size} departures in SQL window ($normalizedTime to $twoHoursLater)")
 
             // Step 3 — deduplicate by route+direction, keep soonest only
             val seen = mutableSetOf<String>()
