@@ -294,16 +294,15 @@ class TransitDb @Inject constructor(
                 INNER JOIN routes r ON r.routeId = t.routeId
                 INNER JOIN stops s ON s.stopId = st.stopId
                 LEFT JOIN calendar c ON t.serviceId = c.serviceId
-                WHERE st.stopId IN ($placeholders)
+                WHERE TRIM(st.stopId) IN (${nearbyStopIds.joinToString(",") { "'${it.trim()}'" }})
                 AND (c.$dayOfWeek = 1 OR c.serviceId IS NULL)
                 ORDER BY st.departureTime ASC
                 """.trimIndent(),
-                (nearbyStopIds).toTypedArray(),
+                null,
             ).use { cursor ->
                 val results = mutableListOf<UpcomingDeparture>()
                 while (cursor.moveToNext()) {
                     val dep = cursor.toUpcomingDeparture()
-                    // Manually filter time to avoid SQL string comparison issues for now
                     if (isTimeBetween(dep.departureTime, normalizedTime, twoHoursLater)) {
                         results.add(dep)
                     }
@@ -323,10 +322,10 @@ class TransitDb @Inject constructor(
                     INNER JOIN trips t ON t.tripId = st.tripId
                     INNER JOIN routes r ON r.routeId = t.routeId
                     INNER JOIN stops s ON s.stopId = st.stopId
-                    WHERE st.stopId IN ($placeholders)
+                    WHERE TRIM(st.stopId) IN (${nearbyStopIds.joinToString(",") { "'${it.trim()}'" }})
                     ORDER BY st.departureTime ASC
                     """.trimIndent(),
-                    (nearbyStopIds).toTypedArray(),
+                    null,
                 ).use { cursor ->
                     val results = mutableListOf<UpcomingDeparture>()
                     while (cursor.moveToNext()) {
