@@ -23,7 +23,7 @@ class MainActivity : ComponentActivity() {
     private val viewModel: AppViewModel by viewModels()
 
     private val permissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
+        ActivityResultContracts.RequestMultiplePermissions(),
     ) { grants ->
         val granted = grants[Manifest.permission.ACCESS_FINE_LOCATION] == true
         viewModel.onPermissionsResult(granted)
@@ -62,11 +62,7 @@ class MainActivity : ComponentActivity() {
             val intent = Intent(this, TrackingService::class.java).apply {
                 action = TrackingService.ACTION_START
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(intent)
-            } else {
-                startService(intent)
-            }
+            startForegroundService(intent)
         } catch (e: Exception) {
             Timber.e(e, "Failed to start TrackingService")
         }

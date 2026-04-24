@@ -67,11 +67,11 @@ dependencies {
 
     // --- FIX: Missing DI types for AppModule ---
     // Location Services (Provides FusedLocationProviderClient)
-    implementation("com.google.android.gms:play-services-location:21.2.0")
+    implementation(libs.play.services.location)
 
     // Networking (Provides OkHttpClient & Logging)
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.logging)
 
     // Database (Provides TransitDatabase and DAOs)
     // ------------------------------------------

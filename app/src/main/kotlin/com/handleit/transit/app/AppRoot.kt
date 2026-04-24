@@ -51,7 +51,7 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
                 val timeFormatter = remember { DateTimeFormatter.ofPattern("HH:mm:ss") }
                 val arrivals = remember(state.upcomingDepartures) {
                     val now = LocalTime.now()
-                    state.upcomingDepartures.mapNotNull { departure ->
+                    state.upcomingDepartures.asSequence().mapNotNull { departure ->
                         val route = Route(
                             routeId = departure.routeId,
                             routeShortName = departure.routeShortName,
@@ -67,12 +67,12 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
                                     val h = parts[0].toInt() % 24
                                     "%02d:%s:%s".format(h, parts[1], parts[2])
                                 },
-                                timeFormatter
+                                timeFormatter,
                             )
                             val diff = java.time.Duration.between(now, depTime).toMinutes()
                             if (diff < 0) return@mapNotNull null
                             diff.toInt()
-                        } catch (e: Exception) {
+                        } catch (_: Exception) {
                             null
                         }
                         RouteArrival(
@@ -85,6 +85,7 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
                         )
                     }.distinctBy { "${it.route.routeId}-${it.directionId}" }
                         .sortedBy { it.etaMinutes ?: Int.MAX_VALUE }
+                        .toList()
                 }
 
                 BottomSheetScaffold(

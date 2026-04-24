@@ -26,25 +26,19 @@ navigationCompose       = "2.7.7"
 hilt                    = "2.50"         # Verified — works with KSP 1.9.22
 hiltNavigationCompose   = "1.1.0"
 
-# Room
-room                    = "2.6.1"
-
 # Network
 okhttp                  = "4.12.0"
 
 # Maps
 mapsCompose             = "4.3.0"        # maps-compose — verified stable
 playServicesMaps        = "18.2.0"
-playServicesLocation    = "21.1.0"
+playServicesLocation    = "21.3.0"
 
 # Coroutines
 coroutines              = "1.7.3"        # Stable — 1.8.x requires Kotlin 1.9.21+
 
 # DataStore
 datastore               = "1.0.0"
-
-# Serialization
-serialization           = "1.6.3"
 
 # Logging
 timber                  = "5.0.1"
@@ -66,7 +60,6 @@ androidx-activity-compose   = { group = "androidx.activity",  name = "activity-c
 # ── Compose BOM + Libraries ───────────────────────────────────────────────────
 compose-bom             = { group = "androidx.compose",     name = "compose-bom",            version.ref = "composeBom" }
 compose-ui              = { group = "androidx.compose.ui",  name = "ui" }
-compose-ui-graphics     = { group = "androidx.compose.ui",  name = "ui-graphics" }
 compose-ui-tooling      = { group = "androidx.compose.ui",  name = "ui-tooling" }
 compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 compose-material3       = { group = "androidx.compose.material3", name = "material3" }
@@ -77,11 +70,6 @@ compose-navigation      = { group = "androidx.navigation",  name = "navigation-c
 hilt-android            = { group = "com.google.dagger",    name = "hilt-android",            version.ref = "hilt" }
 hilt-compiler           = { group = "com.google.dagger",    name = "hilt-android-compiler",   version.ref = "hilt" }
 hilt-navigation-compose = { group = "androidx.hilt",        name = "hilt-navigation-compose", version.ref = "hiltNavigationCompose" }
-
-# ── Room ──────────────────────────────────────────────────────────────────────
-room-runtime            = { group = "androidx.room",        name = "room-runtime",            version.ref = "room" }
-room-compiler           = { group = "androidx.room",        name = "room-compiler",           version.ref = "room" }
-room-ktx                = { group = "androidx.room",        name = "room-ktx",                version.ref = "room" }
 
 # ── Network ───────────────────────────────────────────────────────────────────
 # NOTE: We do NOT use gtfs-realtime-bindings — it's abandoned and causes
@@ -98,9 +86,8 @@ play-services-location  = { group = "com.google.android.gms",  name = "play-serv
 coroutines-android      = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android",       version.ref = "coroutines" }
 coroutines-play-services= { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "coroutines" }
 
-# ── Storage & Serialization ───────────────────────────────────────────────────
+# ── Storage ───────────────────────────────────────────────────────────────────
 datastore-preferences   = { group = "androidx.datastore",   name = "datastore-preferences",   version.ref = "datastore" }
-serialization-json      = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 timber                  = { group = "com.jakewharton.timber", name = "timber",                version.ref = "timber" }
