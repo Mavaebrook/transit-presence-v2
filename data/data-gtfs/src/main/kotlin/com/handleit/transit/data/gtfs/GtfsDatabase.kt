@@ -35,6 +35,17 @@ class TransitDb @Inject constructor(
             } else {
                 val opened = openOrCopyDatabase()
                 _db = opened
+                
+                // Run diagnostic on open
+                try {
+                    opened.rawQuery("SELECT count(*) FROM stops", null).use { if(it.moveToFirst()) Timber.d("DB Diagnostic: stops has ${it.getInt(0)} rows") }
+                    opened.rawQuery("SELECT count(*) FROM stop_times", null).use { if(it.moveToFirst()) Timber.d("DB Diagnostic: stop_times has ${it.getInt(0)} rows") }
+                    opened.rawQuery("SELECT count(*) FROM trips", null).use { if(it.moveToFirst()) Timber.d("DB Diagnostic: trips has ${it.getInt(0)} rows") }
+                    opened.rawQuery("SELECT count(*) FROM calendar", null).use { if(it.moveToFirst()) Timber.d("DB Diagnostic: calendar has ${it.getInt(0)} rows") }
+                } catch (e: Exception) {
+                    Timber.e(e, "DB Diagnostic failed")
+                }
+                
                 opened
             }
         }
@@ -228,6 +239,13 @@ class TransitDb @Inject constructor(
         radiusStops: Int = 10,
     ): List<UpcomingDeparture> = withContext(Dispatchers.IO) {
         try {
+            val db = getDb()
+            
+            // EMERGENCY DIAGNOSTIC
+            db.rawQuery("SELECT count(*) FROM stops", null).use { if(it.moveToFirst()) Timber.d("DIAGNOSTIC: stops=${it.getInt(0)}") }
+            db.rawQuery("SELECT count(*) FROM stop_times", null).use { if(it.moveToFirst()) Timber.d("DIAGNOSTIC: stop_times=${it.getInt(0)}") }
+            db.rawQuery("SELECT count(*) FROM calendar", null).use { if(it.moveToFirst()) Timber.d("DIAGNOSTIC: calendar=${it.getInt(0)}") }
+
             val dayOfWeek = LocalDate.now().dayOfWeek.name.lowercase()
 
             // Step 1 — get nearby stop IDs
@@ -244,9 +262,20 @@ class TransitDb @Inject constructor(
                 ids
             }
 
-            Timber.d("getUpcomingDeparturesNearby: Found ${nearbyStopIds.size} nearby stops")
+            Timber.d("getUpcomingDeparturesNearby: Found ${nearbyStopIds.size} nearby stops: ${nearbyStopIds.take(5)}")
 
             if (nearbyStopIds.isEmpty()) return@withContext emptyList()
+            
+            // Diagnostic for first stop
+            nearbyStopIds.firstOrNull()?.let { firstId ->
+                getDb().rawQuery("SELECT count(*) FROM stop_times WHERE stopId = ?", arrayOf(firstId)).use {
+                    if (it.moveToFirst()) Timber.d("DB Diagnostic: Stop '$firstId' has ${it.getInt(0)} stop_times")
+                }
+                // Try trimmed check too
+                getDb().rawQuery("SELECT count(*) FROM stop_times WHERE TRIM(stopId) = TRIM(?)", arrayOf(firstId)).use {
+                    if (it.moveToFirst()) Timber.d("DB Diagnostic: Trimmed Stop '$firstId' has ${it.getInt(0)} stop_times")
+                }
+            }
 
             val placeholders = nearbyStopIds.joinToString(",") { "?" }
             val normalizedTime = if (afterTime.length < 8) "0$afterTime" else afterTime
@@ -258,38 +287,33 @@ class TransitDb @Inject constructor(
             var allDepartures = getDb().rawQuery(
                 """
                 SELECT
-                    r.routeId,
-                    r.routeShortName,
-                    r.routeLongName,
-                    r.routeColor,
-                    r.routeTextColor,
-                    t.tripHeadsign,
-                    t.directionId,
-                    st.departureTime,
-                    st.stopSequence,
-                    s.stopName,
-                    st.stopId
+                    r.routeId, r.routeShortName, r.routeLongName, r.routeColor, r.routeTextColor,
+                    t.tripHeadsign, t.directionId, st.departureTime, st.stopSequence, s.stopName, st.stopId
                 FROM stop_times st
                 INNER JOIN trips t ON t.tripId = st.tripId
                 INNER JOIN routes r ON r.routeId = t.routeId
                 INNER JOIN stops s ON s.stopId = st.stopId
                 LEFT JOIN calendar c ON t.serviceId = c.serviceId
                 WHERE st.stopId IN ($placeholders)
-                AND substr('0' || st.departureTime, -8) >= ?
-                AND substr('0' || st.departureTime, -8) <= ?
                 AND (c.$dayOfWeek = 1 OR c.serviceId IS NULL)
-                ORDER BY substr('0' || st.departureTime, -8) ASC
+                ORDER BY st.departureTime ASC
                 """.trimIndent(),
-                (nearbyStopIds + listOf(normalizedTime, twoHoursLater)).toTypedArray(),
+                (nearbyStopIds).toTypedArray(),
             ).use { cursor ->
                 val results = mutableListOf<UpcomingDeparture>()
-                while (cursor.moveToNext()) results.add(cursor.toUpcomingDeparture())
+                while (cursor.moveToNext()) {
+                    val dep = cursor.toUpcomingDeparture()
+                    // Manually filter time to avoid SQL string comparison issues for now
+                    if (isTimeBetween(dep.departureTime, normalizedTime, twoHoursLater)) {
+                        results.add(dep)
+                    }
+                }
                 results
             }
 
             // Fallback: If no results with day-of-week filter, try without it
             if (allDepartures.isEmpty()) {
-                Timber.w("getUpcomingDeparturesNearby: No results for $dayOfWeek, trying fallback query...")
+                Timber.w("getUpcomingDeparturesNearby: No results for $dayOfWeek with time filter, trying fallback...")
                 allDepartures = getDb().rawQuery(
                     """
                     SELECT
@@ -300,20 +324,22 @@ class TransitDb @Inject constructor(
                     INNER JOIN routes r ON r.routeId = t.routeId
                     INNER JOIN stops s ON s.stopId = st.stopId
                     WHERE st.stopId IN ($placeholders)
-                    AND substr('0' || st.departureTime, -8) >= ?
-                    AND substr('0' || st.departureTime, -8) <= ?
-                    ORDER BY substr('0' || st.departureTime, -8) ASC
-                    LIMIT 100
+                    ORDER BY st.departureTime ASC
                     """.trimIndent(),
-                    (nearbyStopIds + listOf(normalizedTime, twoHoursLater)).toTypedArray(),
+                    (nearbyStopIds).toTypedArray(),
                 ).use { cursor ->
                     val results = mutableListOf<UpcomingDeparture>()
-                    while (cursor.moveToNext()) results.add(cursor.toUpcomingDeparture())
+                    while (cursor.moveToNext()) {
+                        val dep = cursor.toUpcomingDeparture()
+                        if (isTimeBetween(dep.departureTime, normalizedTime, twoHoursLater)) {
+                            results.add(dep)
+                        }
+                    }
                     results
                 }
             }
 
-            Timber.d("getUpcomingDeparturesNearby: Found ${allDepartures.size} raw departures")
+            Timber.d("getUpcomingDeparturesNearby: Final count is ${allDepartures.size} raw departures")
 
             // Step 3 — deduplicate by route+direction, keep soonest only
             val seen = mutableSetOf<String>()
@@ -493,6 +519,14 @@ class TransitDb @Inject constructor(
         } catch (_: Exception) {
             time
         }
+    }
+
+    private fun isTimeBetween(time: String, start: String, end: String): Boolean {
+        fun normalize(t: String): String = if (t.length < 8) "0$t" else t
+        val nt = normalize(time)
+        val ns = normalize(start)
+        val ne = normalize(end)
+        return nt >= ns && nt <= ne
     }
 
     // ── Cursor Helpers ────────────────────────────────────────────────────────
