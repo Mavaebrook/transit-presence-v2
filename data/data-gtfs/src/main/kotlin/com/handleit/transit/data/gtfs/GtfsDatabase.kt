@@ -294,13 +294,17 @@ class TransitDb @Inject constructor(
                 INNER JOIN trips t ON t.tripId = st.tripId
                 INNER JOIN routes r ON r.routeId = t.routeId
                 INNER JOIN stops s ON s.stopId = st.stopId
-                LEFT JOIN calendar c ON t.serviceId = c.serviceId
                 WHERE TRIM(st.stopId) IN (${nearbyStopIds.joinToString(",") { "'${it.trim()}'" }})
                 ORDER BY st.departureTime ASC
                 """.trimIndent(),
                 null,
             ).use { cursor ->
                 val results = mutableListOf<UpcomingDeparture>()
+                if (cursor.moveToFirst()) {
+                    Timber.d("getUpcomingDeparturesNearby: Found ${cursor.count} raw rows in join query")
+                    Timber.d("getUpcomingDeparturesNearby: First raw departureTime in result: '${cursor.getString(7)}' for stop ${cursor.getString(10)}")
+                    cursor.moveToPosition(-1)
+                }
                 while (cursor.moveToNext()) {
                     val dep = cursor.toUpcomingDeparture()
                     // Filter by time in Kotlin (much safer than SQL string comparison)
