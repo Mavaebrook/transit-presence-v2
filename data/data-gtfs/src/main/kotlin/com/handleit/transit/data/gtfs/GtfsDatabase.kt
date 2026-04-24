@@ -255,7 +255,7 @@ class TransitDb @Inject constructor(
             Timber.d("getUpcomingDeparturesNearby: Querying between $normalizedTime and $twoHoursLater on $dayOfWeek")
 
             // Step 2 — get all departures for those stops within next 2 hours
-            val allDepartures = getDb().rawQuery(
+            var allDepartures = getDb().rawQuery(
                 """
                 SELECT
                     r.routeId,
@@ -285,6 +285,32 @@ class TransitDb @Inject constructor(
                 val results = mutableListOf<UpcomingDeparture>()
                 while (cursor.moveToNext()) results.add(cursor.toUpcomingDeparture())
                 results
+            }
+
+            // Fallback: If no results with day-of-week filter, try without it
+            if (allDepartures.isEmpty()) {
+                Timber.w("getUpcomingDeparturesNearby: No results for $dayOfWeek, trying fallback query...")
+                allDepartures = getDb().rawQuery(
+                    """
+                    SELECT
+                        r.routeId, r.routeShortName, r.routeLongName, r.routeColor, r.routeTextColor,
+                        t.tripHeadsign, t.directionId, st.departureTime, st.stopSequence, s.stopName, st.stopId
+                    FROM stop_times st
+                    INNER JOIN trips t ON t.tripId = st.tripId
+                    INNER JOIN routes r ON r.routeId = t.routeId
+                    INNER JOIN stops s ON s.stopId = st.stopId
+                    WHERE st.stopId IN ($placeholders)
+                    AND substr('0' || st.departureTime, -8) >= ?
+                    AND substr('0' || st.departureTime, -8) <= ?
+                    ORDER BY substr('0' || st.departureTime, -8) ASC
+                    LIMIT 100
+                    """.trimIndent(),
+                    (nearbyStopIds + listOf(normalizedTime, twoHoursLater)).toTypedArray(),
+                ).use { cursor ->
+                    val results = mutableListOf<UpcomingDeparture>()
+                    while (cursor.moveToNext()) results.add(cursor.toUpcomingDeparture())
+                    results
+                }
             }
 
             Timber.d("getUpcomingDeparturesNearby: Found ${allDepartures.size} raw departures")
