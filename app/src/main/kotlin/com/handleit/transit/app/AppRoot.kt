@@ -45,7 +45,7 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
                 val scaffoldState = rememberBottomSheetScaffoldState(
                     bottomSheetState = rememberStandardBottomSheetState(
                         initialValue = SheetValue.PartiallyExpanded,
-                    )
+                    ),
                 )
 
                 val timeFormatter = remember { DateTimeFormatter.ofPattern("HH:mm:ss") }
@@ -69,7 +69,9 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
                                 },
                                 timeFormatter,
                             )
-                            val diff = java.time.Duration.between(now, depTime).toMinutes()
+                            var diff = java.time.Duration.between(now, depTime).toMinutes()
+                            // Handle midnight wrap-around: if more than 12h in the past, it's likely tomorrow
+                            if (diff < -720) diff += 1440
                             if (diff < 0) return@mapNotNull null
                             diff.toInt()
                         } catch (_: Exception) {

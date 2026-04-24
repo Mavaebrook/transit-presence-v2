@@ -16,7 +16,7 @@ import javax.inject.Singleton
 
 @Singleton
 class TransitDb @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
 ) {
     companion object {
         const val DB_NAME = "transit_prepopulated.db"
@@ -26,7 +26,7 @@ class TransitDb @Inject constructor(
 
     private fun getDb(): SQLiteDatabase {
         val current = _db
-        if (current != null && current.isOpen) return current
+        if ((current != null) && current.isOpen) return current
 
         return synchronized(this) {
             val secondCheck = _db
@@ -247,7 +247,8 @@ class TransitDb @Inject constructor(
             if (nearbyStopIds.isEmpty()) return@withContext emptyList()
 
             val placeholders = nearbyStopIds.joinToString(",") { "?" }
-            val twoHoursLater = addHours(afterTime, 2)
+            val normalizedTime = if (afterTime.length < 8) "0$afterTime" else afterTime
+            val twoHoursLater = addHours(normalizedTime, 2)
 
             // Step 2 — get all departures for those stops within next 2 hours
             val allDepartures = getDb().rawQuery(
@@ -270,12 +271,12 @@ class TransitDb @Inject constructor(
                 INNER JOIN stops s ON s.stopId = st.stopId
                 LEFT JOIN calendar c ON t.serviceId = c.serviceId
                 WHERE st.stopId IN ($placeholders)
-                AND st.departureTime >= ?
-                AND st.departureTime <= ?
+                AND substr('0' || st.departureTime, -8) >= ?
+                AND substr('0' || st.departureTime, -8) <= ?
                 AND (c.$dayOfWeek = 1 OR c.serviceId IS NULL)
-                ORDER BY st.departureTime ASC
+                ORDER BY substr('0' || st.departureTime, -8) ASC
                 """.trimIndent(),
-                (nearbyStopIds + listOf(afterTime, twoHoursLater)).toTypedArray()
+                (nearbyStopIds + listOf(normalizedTime, twoHoursLater)).toTypedArray(),
             ).use { cursor ->
                 val results = mutableListOf<UpcomingDeparture>()
                 while (cursor.moveToNext()) results.add(cursor.toUpcomingDeparture())
@@ -287,7 +288,7 @@ class TransitDb @Inject constructor(
             allDepartures.filter { dep ->
                 val key = "${dep.routeId}-${dep.directionId}"
                 seen.add(key)
-            }.sortedBy { it.departureTime }
+            }
 
         } catch (e: Exception) {
             Timber.e(e, "TransitDb: getUpcomingDeparturesNearby failed")
@@ -304,6 +305,7 @@ class TransitDb @Inject constructor(
     ): List<UpcomingDeparture> = withContext(Dispatchers.IO) {
         try {
             val dayOfWeek = LocalDate.now().dayOfWeek.name.lowercase()
+            val normalizedTime = if (afterTime.length < 8) "0$afterTime" else afterTime
             getDb().rawQuery(
                 """
                 SELECT
@@ -324,12 +326,12 @@ class TransitDb @Inject constructor(
                 INNER JOIN stops s ON s.stopId = st.stopId
                 LEFT JOIN calendar c ON t.serviceId = c.serviceId
                 WHERE st.stopId = ?
-                AND st.departureTime >= ?
+                AND substr('0' || st.departureTime, -8) >= ?
                 AND (c.$dayOfWeek = 1 OR c.serviceId IS NULL)
-                ORDER BY st.departureTime ASC
+                ORDER BY substr('0' || st.departureTime, -8) ASC
                 LIMIT ?
                 """.trimIndent(),
-                arrayOf(stopId, afterTime, limit.toString())
+                arrayOf(stopId, normalizedTime, limit.toString()),
             ).use { cursor ->
                 val results = mutableListOf<UpcomingDeparture>()
                 while (cursor.moveToNext()) results.add(cursor.toUpcomingDeparture())
@@ -344,9 +346,10 @@ class TransitDb @Inject constructor(
     private fun fallbackSimpleQuery(
         stopId: String,
         afterTime: String,
-        limit: Int
+        limit: Int,
     ): List<UpcomingDeparture> {
         return try {
+            val normalizedTime = if (afterTime.length < 8) "0$afterTime" else afterTime
             getDb().rawQuery(
                 """
                 SELECT
@@ -366,11 +369,11 @@ class TransitDb @Inject constructor(
                 INNER JOIN routes r ON r.routeId = t.routeId
                 INNER JOIN stops s ON s.stopId = st.stopId
                 WHERE st.stopId = ?
-                AND st.departureTime >= ?
-                ORDER BY st.departureTime ASC
+                AND substr('0' || st.departureTime, -8) >= ?
+                ORDER BY substr('0' || st.departureTime, -8) ASC
                 LIMIT ?
                 """.trimIndent(),
-                arrayOf(stopId, afterTime, limit.toString())
+                arrayOf(stopId, normalizedTime, limit.toString()),
             ).use { cursor ->
                 val results = mutableListOf<UpcomingDeparture>()
                 while (cursor.moveToNext()) results.add(cursor.toUpcomingDeparture())
@@ -423,11 +426,12 @@ class TransitDb @Inject constructor(
                 args.add(routeShortName.trim())
             }
             if (!startTime.isNullOrBlank()) {
-                sql.append(" AND st.departureTime >= ?")
-                args.add(startTime.trim())
+                val normalizedStart = if (startTime.length < 8) "0$startTime" else startTime
+                sql.append(" AND substr('0' || st.departureTime, -8) >= ?")
+                args.add(normalizedStart.trim())
             }
 
-            sql.append(" ORDER BY st.departureTime ASC LIMIT 100")
+            sql.append(" ORDER BY substr('0' || st.departureTime, -8) ASC LIMIT 100")
 
             getDb().rawQuery(sql.toString(), args.toTypedArray()).use { cursor ->
                 val results = mutableListOf<UpcomingDeparture>()
@@ -447,7 +451,7 @@ class TransitDb @Inject constructor(
             val parts = time.split(":")
             val h = parts[0].toInt() + hours
             "%02d:%s:%s".format(h, parts[1], parts[2])
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             time
         }
     }

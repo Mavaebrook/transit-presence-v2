@@ -74,11 +74,11 @@ class AppViewModel @Inject constructor(
     private val _state = MutableStateFlow(AppState())
     val state: StateFlow<AppState> = _state.asStateFlow()
 
-    private val fsmEngine = RideFsmEngine(onTransition = { log ->
+    private val fsmEngine = RideFsmEngine { log ->
         transitionLogs.add(log)
         if (transitionLogs.size > 100) transitionLogs.removeAt(0)
         _state.update { it.copy(transitionLog = transitionLogs.toList()) }
-    })
+    }
 
     init {
         observeFsmState()
@@ -143,6 +143,7 @@ class AppViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 locationModule.locationFlow().collect { snapshot ->
+                    Timber.d("Location updated: ${snapshot.latLng.lat}, ${snapshot.latLng.lng}")
                     _state.update { it.copy(userLocation = snapshot.latLng) }
                     fsmEngine.process(RideEvent.LocationUpdated(snapshot))
                     refreshNearbyStops(snapshot.latLng)
@@ -218,6 +219,7 @@ class AppViewModel @Inject constructor(
                     afterTime = now,
                     radiusStops = 10,
                 )
+                Timber.d("loadUpcomingDepartures: Found ${departures.size} nearby departures at $now")
                 _state.update {
                     it.copy(
                         upcomingDepartures = departures,
@@ -267,8 +269,8 @@ class AppViewModel @Inject constructor(
 
     private fun runFusionIfNeeded(snapshot: LocationSnapshot) {
         val rideState = _state.value.rideState
-        if (rideState !is RideState.BoardingWindow &&
-            rideState !is RideState.OnBus
+        if ((rideState !is RideState.BoardingWindow) &&
+            (rideState !is RideState.OnBus)
         ) return
 
         val bundle = SignalBundle(
@@ -321,8 +323,7 @@ class AppViewModel @Inject constructor(
     }
 
     private fun updateArrivals() {
-        val rideState = _state.value.rideState
-        if (rideState !is RideState.WaitingAtStop) return
+        val rideState = (_state.value.rideState as? RideState.WaitingAtStop) ?: return
         val arrivals = gtfsRtClient.arrivalsForStop(
             stopId = rideState.stop.stopId,
             routeId = rideState.route.routeId,

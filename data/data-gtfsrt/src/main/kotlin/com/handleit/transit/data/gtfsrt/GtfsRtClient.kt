@@ -17,7 +17,7 @@ import javax.inject.Singleton
 
 @Singleton
 class GtfsRtClient @Inject constructor(
-    private val httpClient: OkHttpClient
+    private val httpClient: OkHttpClient,
 ) {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var pollingJob: Job? = null
@@ -53,7 +53,7 @@ class GtfsRtClient @Inject constructor(
     }
 
     fun arrivalsForStop(stopId: String, routeId: String): List<BusArrival> {
-        return _vehicles.value
+        return _vehicles.value.asSequence()
             .filter { it.routeId == routeId }
             .mapNotNull { v ->
                 val secsToArrival = estimateSecsToArrival(v, stopId) ?: return@mapNotNull null
@@ -68,6 +68,7 @@ class GtfsRtClient @Inject constructor(
                 )
             }
             .sortedBy { it.secsToArrival }
+            .toList()
     }
 
     private fun estimateSecsToArrival(vehicle: VehiclePosition, stopId: String): Long? {
