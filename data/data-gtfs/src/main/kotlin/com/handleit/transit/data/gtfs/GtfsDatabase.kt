@@ -69,6 +69,43 @@ class TransitDb @Inject constructor(
         return SQLiteDatabase.openDatabase(dbFile.path, null, SQLiteDatabase.OPEN_READONLY)
     }
 
+    // ── Emergency Diagnostic ──────────────────────────────────────────────────
+
+    suspend fun runEmergencyDiagnostic() = withContext(Dispatchers.IO) {
+        try {
+            val db = getDb()
+            Timber.d("===== EMERGENCY DB DUMP =====")
+
+            // 1. Check Calendar (The most likely culprit)
+            db.rawQuery("SELECT * FROM calendar LIMIT 5", null).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val row = (0 until cursor.columnCount).joinToString { "${cursor.getColumnName(it)}=${cursor.getString(it)}" }
+                    Timber.d("DUMP: calendar -> $row")
+                }
+            }
+
+            // 2. Check Stop Times (Time format and whitespace)
+            db.rawQuery("SELECT * FROM stop_times LIMIT 3", null).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val row = (0 until cursor.columnCount).joinToString { "${cursor.getColumnName(it)}='${cursor.getString(it)}'" }
+                    Timber.d("DUMP: stop_times -> $row")
+                }
+            }
+
+            // 3. Check Trips (Joining logic)
+            db.rawQuery("SELECT * FROM trips LIMIT 3", null).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val row = (0 until cursor.columnCount).joinToString { "${cursor.getColumnName(it)}='${cursor.getString(it)}'" }
+                    Timber.d("DUMP: trips -> $row")
+                }
+            }
+            
+            Timber.d("==============================")
+        } catch (e: Exception) {
+            Timber.e(e, "Emergency diagnostic failed")
+        }
+    }
+
     // ── Stops ─────────────────────────────────────────────────────────────────
 
     suspend fun getStopById(id: String): Stop? = withContext(Dispatchers.IO) {

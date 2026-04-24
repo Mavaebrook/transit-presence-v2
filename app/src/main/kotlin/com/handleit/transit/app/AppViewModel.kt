@@ -85,6 +85,11 @@ class AppViewModel @Inject constructor(
         observeVehicles()
         observeFeedStatus()
         gtfsRtClient.startPolling()
+        
+        // Trigger emergency diagnostic
+        viewModelScope.launch {
+            transitDb.runEmergencyDiagnostic()
+        }
     }
 
     fun onPermissionsResult(granted: Boolean) {
