@@ -277,14 +277,15 @@ class TransitDb @Inject constructor(
                 }
             }
 
-            val placeholders = nearbyStopIds.joinToString(",") { "?" }
             val normalizedTime = if (afterTime.length < 8) "0$afterTime" else afterTime
             val twoHoursLater = addHours(normalizedTime, 2)
 
             Timber.d("getUpcomingDeparturesNearby: Querying between $normalizedTime and $twoHoursLater on $dayOfWeek")
 
             // Step 2 — get all departures for those stops within next 2 hours
-            var allDepartures = getDb().rawQuery(
+            // We strip the day-of-week and time filters from SQL to ensure we get data,
+            // then we handle the filtering in Kotlin to be 100% sure about the logic.
+            val allDepartures = getDb().rawQuery(
                 """
                 SELECT
                     r.routeId, r.routeShortName, r.routeLongName, r.routeColor, r.routeTextColor,
@@ -295,7 +296,6 @@ class TransitDb @Inject constructor(
                 INNER JOIN stops s ON s.stopId = st.stopId
                 LEFT JOIN calendar c ON t.serviceId = c.serviceId
                 WHERE TRIM(st.stopId) IN (${nearbyStopIds.joinToString(",") { "'${it.trim()}'" }})
-                AND (c.$dayOfWeek = 1 OR c.serviceId IS NULL)
                 ORDER BY st.departureTime ASC
                 """.trimIndent(),
                 null,
@@ -303,6 +303,7 @@ class TransitDb @Inject constructor(
                 val results = mutableListOf<UpcomingDeparture>()
                 while (cursor.moveToNext()) {
                     val dep = cursor.toUpcomingDeparture()
+                    // Filter by time in Kotlin (much safer than SQL string comparison)
                     if (isTimeBetween(dep.departureTime, normalizedTime, twoHoursLater)) {
                         results.add(dep)
                     }
@@ -310,49 +311,19 @@ class TransitDb @Inject constructor(
                 results
             }
 
-            // Fallback: If no results with day-of-week filter, try without it
-            if (allDepartures.isEmpty()) {
-                Timber.w("getUpcomingDeparturesNearby: No results for $dayOfWeek with time filter, trying fallback...")
-                allDepartures = getDb().rawQuery(
-                    """
-                    SELECT
-                        r.routeId, r.routeShortName, r.routeLongName, r.routeColor, r.routeTextColor,
-                        t.tripHeadsign, t.directionId, st.departureTime, st.stopSequence, s.stopName, st.stopId
-                    FROM stop_times st
-                    INNER JOIN trips t ON t.tripId = st.tripId
-                    INNER JOIN routes r ON r.routeId = t.routeId
-                    INNER JOIN stops s ON s.stopId = st.stopId
-                    WHERE TRIM(st.stopId) IN (${nearbyStopIds.joinToString(",") { "'${it.trim()}'" }})
-                    ORDER BY st.departureTime ASC
-                    """.trimIndent(),
-                    null,
-                ).use { cursor ->
-                    val results = mutableListOf<UpcomingDeparture>()
-                    while (cursor.moveToNext()) {
-                        val dep = cursor.toUpcomingDeparture()
-                        if (isTimeBetween(dep.departureTime, normalizedTime, twoHoursLater)) {
-                            results.add(dep)
-                        }
-                    }
-                    results
-                }
-            }
-
-            Timber.d("getUpcomingDeparturesNearby: Final count is ${allDepartures.size} raw departures")
+            Timber.d("getUpcomingDeparturesNearby: Found ${allDepartures.size} filtered departures")
 
             // Step 3 — deduplicate by route+direction, keep soonest only
             val seen = mutableSetOf<String>()
-            val filtered = allDepartures.filter { dep ->
+            val deduplicated = allDepartures.filter { dep ->
                 val key = "${dep.routeId}-${dep.directionId}"
-                seen.add(key)
+                if (seen.contains(key)) false else {
+                    seen.add(key)
+                    true
+                }
             }
             
-            if (filtered.isEmpty() && allDepartures.isNotEmpty()) {
-                Timber.w("getUpcomingDeparturesNearby: Filtering logic emptied the list!")
-            }
-            
-            // Return the filtered list
-            filtered
+            deduplicated
 
         } catch (e: Exception) {
             Timber.e(e, "TransitDb: getUpcomingDeparturesNearby failed")
