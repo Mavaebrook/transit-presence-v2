@@ -244,11 +244,15 @@ class TransitDb @Inject constructor(
                 ids
             }
 
+            Timber.d("getUpcomingDeparturesNearby: Found ${nearbyStopIds.size} nearby stops")
+
             if (nearbyStopIds.isEmpty()) return@withContext emptyList()
 
             val placeholders = nearbyStopIds.joinToString(",") { "?" }
             val normalizedTime = if (afterTime.length < 8) "0$afterTime" else afterTime
             val twoHoursLater = addHours(normalizedTime, 2)
+
+            Timber.d("getUpcomingDeparturesNearby: Querying between $normalizedTime and $twoHoursLater on $dayOfWeek")
 
             // Step 2 — get all departures for those stops within next 2 hours
             val allDepartures = getDb().rawQuery(
@@ -283,12 +287,21 @@ class TransitDb @Inject constructor(
                 results
             }
 
+            Timber.d("getUpcomingDeparturesNearby: Found ${allDepartures.size} raw departures")
+
             // Step 3 — deduplicate by route+direction, keep soonest only
             val seen = mutableSetOf<String>()
-            allDepartures.filter { dep ->
+            val filtered = allDepartures.filter { dep ->
                 val key = "${dep.routeId}-${dep.directionId}"
                 seen.add(key)
             }
+            
+            if (filtered.isEmpty() && allDepartures.isNotEmpty()) {
+                Timber.w("getUpcomingDeparturesNearby: Filtering logic emptied the list!")
+            }
+            
+            // Return the filtered list
+            filtered
 
         } catch (e: Exception) {
             Timber.e(e, "TransitDb: getUpcomingDeparturesNearby failed")
