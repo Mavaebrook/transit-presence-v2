@@ -210,6 +210,18 @@ private fun OsmMapLayer(
 
             state.userLocation?.let {
                 mapView.controller.animateTo(GeoPoint(it.lat, it.lng))
+                
+                // Add "My Location" marker for OSM
+                val myLocationMarker = org.osmdroid.views.overlay.Marker(mapView).apply {
+                    position = GeoPoint(it.lat, it.lng)
+                    title = "My Location"
+                    icon = createDotDrawable(mapView.context, 0xFF4285F4.toInt(), 12) // Blue GPS dot
+                    setAnchor(
+                        org.osmdroid.views.overlay.Marker.ANCHOR_CENTER,
+                        org.osmdroid.views.overlay.Marker.ANCHOR_CENTER
+                    )
+                }
+                mapView.overlays.add(myLocationMarker)
             }
 
             val bounds = mapView.boundingBox

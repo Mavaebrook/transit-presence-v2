@@ -80,10 +80,12 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
                         RouteArrival(
                             route = route,
                             headsign = departure.headsign.ifBlank { departure.routeLongName },
+                            stopId = departure.stopId,
                             nearestStopName = departure.stopName,
                             etaMinutes = etaMinutes,
                             isRealtime = false,
                             directionId = departure.directionId,
+                            scheduledTime = departure.departureTime,
                         )
                     }.distinctBy { "${it.route.routeId}-${it.directionId}" }
                         .sortedBy { it.etaMinutes ?: Int.MAX_VALUE }
@@ -92,13 +94,13 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
 
                 BottomSheetScaffold(
                     scaffoldState = scaffoldState,
-                    sheetPeekHeight = 200.dp,
+                    sheetPeekHeight = 110.dp, // Reduced to ensure Search Bar is the primary focus when peeked
                     sheetContainerColor = Color(0xFF1A0A2E),
                     sheetContentColor = Color.White,
                     sheetDragHandle = {
                         Surface(
                             modifier = Modifier
-                                .padding(vertical = 8.dp)
+                                .padding(top = 8.dp, bottom = 4.dp)
                                 .width(36.dp)
                                 .height(4.dp),
                             shape = RoundedCornerShape(2.dp),
@@ -109,15 +111,20 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
                         ArrivalSheetContent(
                             arrivals = arrivals,
                             onRouteClicked = { arrival ->
-                                onIntent(
-                                    AppIntent.RouteSelected(
-                                        route = arrival.route,
-                                        stop = state.nearbyStops.firstOrNull()
-                                            ?: return@ArrivalSheetContent,
-                                        destination = null,
+                                // Find the actual Stop object from the state based on arrival.stopId
+                                val targetStop = state.nearbyStops.find { it.stopId == arrival.stopId }
+                                    ?: state.nearbyStops.firstOrNull() // Fallback
+                                
+                                targetStop?.let { stop ->
+                                    onIntent(
+                                        AppIntent.RouteSelected(
+                                            route = arrival.route,
+                                            stop = stop,
+                                            destination = null,
+                                        )
                                     )
-                                )
-                                navController.navigate(Nav.RIDING)
+                                    navController.navigate(Nav.RIDING)
+                                }
                             }
                         )
                     },

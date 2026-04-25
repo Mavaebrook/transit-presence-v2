@@ -24,11 +24,12 @@ import com.handleit.transit.model.Route
 data class RouteArrival(
     val route: Route,
     val headsign: String,
+    val stopId: String?,
     val nearestStopName: String,
     val etaMinutes: Int?,       // null = scheduled only
     val isRealtime: Boolean,
     val directionId: Int,       // 0 = outbound, 1 = inbound
-    val scheduledTime: String = "" // Added for unique key identification
+    val scheduledTime: String = "", // Added for unique key identification
 )
 
 // ─── Search Bar ──────────────────────────────────────────────────────────────
@@ -111,10 +112,14 @@ fun RouteArrivalCard(
                     .clip(RoundedCornerShape(8.dp))
                     .background(routeColor),
             ) {
+                // If routeShortName is empty, fallback to the first few chars of routeId
+                val displayText = arrival.route.routeShortName.ifBlank { 
+                    arrival.route.routeId.take(3) 
+                }
                 Text(
-                    text = arrival.route.routeShortName,
+                    text = displayText,
                     color = textColor,
-                    fontSize = if (arrival.route.routeShortName.length > 3) 14.sp else 18.sp,
+                    fontSize = if (displayText.length > 3) 14.sp else 18.sp,
                     fontWeight = FontWeight.ExtraBold,
                 )
             }
@@ -122,24 +127,23 @@ fun RouteArrivalCard(
             Spacer(Modifier.width(14.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = arrival.headsign,
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                )
+                
+                if (isInbound) {
                     Text(
-                        text = arrival.headsign,
-                        color = Color.White,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
+                        text = "(Lynx Central)",
+                        color = Color(0xFF69F0AE), // Soft green for indicator
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
                     )
-                    if (isInbound) {
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = "(Lynx Central)",
-                            color = Color(0xFF69F0AE), // Soft green for indicator
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
                 }
+
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = arrival.nearestStopName,
