@@ -53,8 +53,17 @@ class GtfsRtClient @Inject constructor(
     }
 
     fun arrivalsForStop(stopId: String, routeId: String): List<BusArrival> {
-        return _vehicles.value.asSequence()
-            .filter { it.routeId == routeId }
+        val vehicles = _vehicles.value
+        Timber.d("arrivalsForStop: checking $routeId at $stopId. Found ${vehicles.size} vehicles total.")
+        
+        return vehicles.asSequence()
+            .filter { 
+                val match = it.routeId == routeId || it.routeId == "LINK $routeId"
+                if (it.routeId.contains(routeId)) {
+                    Timber.v("arrivalsForStop: Partial match? vehicleRoute=${it.routeId} target=$routeId")
+                }
+                match
+            }
             .mapNotNull { v ->
                 val secsToArrival = estimateSecsToArrival(v, stopId) ?: return@mapNotNull null
                 BusArrival(

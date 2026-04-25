@@ -31,6 +31,7 @@ data class UpcomingDeparture(
     val routeColor: String,
     val routeTextColor: String,
     val headsign: String,
+    val tripId: String,
     val directionId: Int,
     val departureTime: String,  // "HH:MM:SS"
     val stopSequence: Int,

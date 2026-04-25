@@ -219,8 +219,7 @@ class TransitDb @Inject constructor(
     // ── Trips ─────────────────────────────────────────────────────────────────
 
     suspend fun getStopsForTrip(
-        routeId: String,
-        directionId: Int,
+        tripId: String,
         afterStopSequence: Int = 0,
     ): List<TripStop> = withContext(Dispatchers.IO) {
         try {
@@ -235,15 +234,12 @@ class TransitDb @Inject constructor(
                     st.departureTime,
                     st.stopSequence
                 FROM stop_times st
-                INNER JOIN trips t ON t.tripId = st.tripId
                 INNER JOIN stops s ON s.stopId = st.stopId
-                WHERE t.routeId = ?
-                AND t.directionId = ?
+                WHERE TRIM(st.tripId) = TRIM(?)
                 AND st.stopSequence > ?
                 ORDER BY st.stopSequence ASC
-                LIMIT 50
                 """.trimIndent(),
-                arrayOf(routeId, directionId.toString(), afterStopSequence.toString())
+                arrayOf(tripId, afterStopSequence.toString()),
             ).use { cursor ->
                 val results = mutableListOf<TripStop>()
                 while (cursor.moveToNext()) {
@@ -256,7 +252,7 @@ class TransitDb @Inject constructor(
                             arrivalTime = cursor.getString(4),
                             departureTime = cursor.getString(5),
                             stopSequence = cursor.getInt(6),
-                        )
+                        ),
                     )
                 }
                 results
@@ -326,7 +322,8 @@ class TransitDb @Inject constructor(
                 """
                 SELECT
                     r.routeId, r.routeShortName, r.routeLongName, r.routeColor, r.routeTextColor,
-                    t.tripHeadsign, t.directionId, st.departureTime, st.stopSequence, s.stopName, st.stopId
+                    t.tripHeadsign, t.directionId, st.departureTime, st.stopSequence, s.stopName, st.stopId,
+                    t.tripId
                 FROM stop_times st
                 INNER JOIN trips t ON t.tripId = st.tripId
                 INNER JOIN routes r ON r.routeId = t.routeId
@@ -564,5 +561,6 @@ class TransitDb @Inject constructor(
         stopSequence = getInt(8),
         stopName = getString(9),
         stopId = getString(10),
+        tripId = getString(11),
     )
 }

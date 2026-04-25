@@ -27,6 +27,7 @@ fun RidingScreen(
     onConfirmExit: () -> Unit,
     onDismissTrip: () -> Unit,
     onReset: () -> Unit,
+    onDestinationSelected: (TripStop) -> Unit,
 ) {
     AnimatedContent(
         targetState = state::class,
@@ -34,7 +35,7 @@ fun RidingScreen(
         label = "RidingTransition",
     ) { _ ->
         when (state) {
-            is RideState.WaitingAtStop   -> WaitingScreen(state, onReset)
+            is RideState.WaitingAtStop   -> WaitingScreen(state, onReset, onDestinationSelected)
             is RideState.BusApproaching  -> ApproachingScreen(state, onReset)
             is RideState.BoardingWindow  -> BoardingScreen(state, onConfirmBoarding, onReset)
             is RideState.OnBus           -> OnBusScreen(state, onConfirmExit, onReset)
@@ -47,7 +48,11 @@ fun RidingScreen(
 }
 
 @Composable
-fun WaitingScreen(state: RideState.WaitingAtStop, onCancel: () -> Unit) {
+fun WaitingScreen(
+    state: RideState.WaitingAtStop,
+    onCancel: () -> Unit,
+    onDestinationSelected: (TripStop) -> Unit,
+) {
     TransitScaffold {
         StateChip("WAITING AT STOP", MaterialTheme.colorScheme.secondary)
         Spacer(Modifier.height(8.dp))
@@ -58,21 +63,88 @@ fun WaitingScreen(state: RideState.WaitingAtStop, onCancel: () -> Unit) {
             textAlign = TextAlign.Center,
         )
         RouteTag(state.route)
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(16.dp))
+        
         if (state.arrivals.isEmpty()) {
-            LoadingRow("Loading arrivals...")
+            LoadingRow("Checking live arrival times...")
         } else {
-            Text(
-                "NEXT BUS",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
-            )
-            Spacer(Modifier.height(8.dp))
-            state.arrivals.take(3).forEach { ArrivalRow(it) }
+            val soonest = state.arrivals.first()
+            val mins = soonest.secsToArrival / 60
+            val secs = soonest.secsToArrival % 60
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = if (mins > 0) "${mins}m ${secs}s" else "${secs}s",
+                    style = MaterialTheme.typography.displayMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Black
+                )
+                Text(
+                    text = "UNTIL ARRIVAL",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                )
+            }
         }
-        Spacer(Modifier.weight(1f))
+        
+        Spacer(Modifier.height(24.dp))
+        
+        Text(
+            "SELECT YOUR DESTINATION",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.Start
+        )
+        
+        Spacer(Modifier.height(8.dp))
+        
+        if (state.remainingStops.isEmpty()) {
+            LoadingRow("Loading route stops...")
+        } else {
+            androidx.compose.foundation.lazy.LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+            ) {
+                items(state.remainingStops.size) { index ->
+                    val stop = state.remainingStops[index]
+                    Surface(
+                        onClick = { onDestinationSelected(stop) },
+                        color = Color.Transparent,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .background(MaterialTheme.colorScheme.primary, androidx.compose.foundation.shape.CircleShape)
+                            )
+                            Spacer(Modifier.width(16.dp))
+                            Text(
+                                text = stop.stopName,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                        }
+                    }
+                    if (index < state.remainingStops.size - 1) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.05f)
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
         TextButton(onClick = onCancel) {
-            Text("Cancel", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
+            Text("Cancel Trip", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
         }
     }
 }

@@ -10,7 +10,9 @@ sealed class RideState {
     data class WaitingAtStop(
         val stop: Stop,
         val route: Route,
+        val tripId: String? = null,
         val arrivals: List<BusArrival> = emptyList(),
+        val remainingStops: List<TripStop> = emptyList(),
     ) : RideState()
 
     data class BusApproaching(
@@ -66,6 +68,7 @@ sealed class RideEvent {
 
     // GTFS-RT
     data class ArrivalsUpdated(val arrivals: List<BusArrival>) : RideEvent()
+    data class RemainingStopsUpdated(val stops: List<TripStop>) : RideEvent()
     data class EtaThresholdCrossed(
         val arrival: BusArrival,
         val secsToArrival: Long,
@@ -82,7 +85,7 @@ sealed class RideEvent {
     data class ArrivedAtDestination(val stop: Stop) : RideEvent()
 
     // User actions
-    data class RouteSelected(val route: Route, val stop: Stop, val destination: Stop?) : RideEvent()
+    data class RouteSelected(val route: Route, val tripId: String?, val stop: Stop, val destination: Stop?) : RideEvent()
     object BoardingConfirmed : RideEvent()
     object ExitConfirmed : RideEvent()
     object TripDismissed : RideEvent()

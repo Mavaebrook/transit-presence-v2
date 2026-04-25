@@ -55,6 +55,7 @@ class RideFsmEngine(
                 is RideEvent.RouteSelected -> RideState.WaitingAtStop(
                     stop = event.stop,
                     route = event.route,
+                    tripId = event.tripId,
                 )
                 is RideEvent.Reset -> RideState.Idle
                 else -> null
@@ -63,7 +64,13 @@ class RideFsmEngine(
             // ── WAITING_AT_STOP ───────────────────────────────────────────────
             is RideState.WaitingAtStop -> when (event) {
                 is RideEvent.ArrivalsUpdated ->
-                    state.copy(arrivals = event.arrivals)
+                    state.copy(
+                        arrivals = event.arrivals,
+                        tripId = state.tripId ?: event.arrivals.firstOrNull()?.tripId
+                    )
+
+                is RideEvent.RemainingStopsUpdated ->
+                    state.copy(remainingStops = event.stops)
 
                 is RideEvent.EtaThresholdCrossed -> when (event.threshold) {
                     EtaThreshold.T_5MIN, EtaThreshold.T_2MIN ->
@@ -158,6 +165,7 @@ class RideFsmEngine(
                         RideState.WaitingAtStop(
                             stop = state.stop,
                             route = state.route,
+                            tripId = state.arrival.tripId,
                             arrivals = event.arrivals,
                         )
                     } else null

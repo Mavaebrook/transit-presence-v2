@@ -1,6 +1,8 @@
 package com.handleit.transit.feature.map
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -25,6 +27,7 @@ data class RouteArrival(
     val route: Route,
     val headsign: String,
     val stopId: String?,
+    val tripId: String?,
     val nearestStopName: String,
     val etaMinutes: Int?,       // null = scheduled only
     val isRealtime: Boolean,
@@ -100,6 +103,7 @@ fun RouteArrivalCard(
             .padding(horizontal = 12.dp, vertical = 4.dp),
         shape = RoundedCornerShape(8.dp), // Slightly rounded for modern look
         color = backgroundColor,
+        border = if (isInbound) BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)) else null
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
@@ -110,15 +114,16 @@ fun RouteArrivalCard(
                 modifier = Modifier
                     .size(52.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(routeColor),
+                    .background(routeColor)
+                    .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(8.dp)),
             ) {
                 // If routeShortName is empty, fallback to the first few chars of routeId
-                val displayText = arrival.route.routeShortName.ifBlank { 
-                    arrival.route.routeId.take(3) 
+                val displayText = arrival.route.routeShortName.trim().ifBlank { 
+                    arrival.route.routeId.trim().take(3) 
                 }
                 Text(
                     text = displayText,
-                    color = textColor,
+                    color = if (routeColor == Color.White) Color.Black else textColor,
                     fontSize = if (displayText.length > 3) 14.sp else 18.sp,
                     fontWeight = FontWeight.ExtraBold,
                 )

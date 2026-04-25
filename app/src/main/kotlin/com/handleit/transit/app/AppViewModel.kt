@@ -43,6 +43,7 @@ data class AppState(
 sealed class AppIntent {
     data class RouteSelected(
         val route: Route,
+        val tripId: String? = null,
         val stop: Stop,
         val destination: Stop?,
     ) : AppIntent()
@@ -52,6 +53,7 @@ sealed class AppIntent {
     object Reset : AppIntent()
     object ToggleMapProvider : AppIntent()
     data class StopSelected(val stop: Stop?) : AppIntent()
+    data class DestinationSelected(val stop: TripStop) : AppIntent()
     data class RunDebugQuery(
         val stopId: String?,
         val routeNumber: String?,
@@ -104,7 +106,7 @@ class AppViewModel @Inject constructor(
         when (intent) {
             is AppIntent.RouteSelected ->
                 fsmEngine.process(
-                    RideEvent.RouteSelected(intent.route, intent.stop, intent.destination)
+                    RideEvent.RouteSelected(intent.route, intent.tripId, intent.stop, intent.destination)
                 )
             is AppIntent.ConfirmBoarding ->
                 fsmEngine.process(RideEvent.BoardingConfirmed)
@@ -126,6 +128,24 @@ class AppViewModel @Inject constructor(
                 intent.stop?.let { stop -> loadRoutesForStop(stop) }
                     ?: _state.update { it.copy(routesForSelectedStop = emptyList()) }
             }
+            is AppIntent.DestinationSelected -> {
+                val current = _state.value.rideState
+                if (current is RideState.WaitingAtStop) {
+                    val destStop = Stop(
+                        stopId = intent.stop.stopId,
+                        stopName = intent.stop.stopName,
+                        lat = intent.stop.lat,
+                        lng = intent.stop.lng,
+                        wheelchairBoarding = 0
+                    )
+                    fsmEngine.process(RideEvent.RouteSelected(
+                        route = current.route,
+                        tripId = current.tripId,
+                        stop = current.stop,
+                        destination = destStop
+                    ))
+                }
+            }
             is AppIntent.RunDebugQuery ->
                 runDiagnosticQuery(intent.stopId, intent.routeNumber, intent.time)
             is AppIntent.PromoteDebugToUI ->
@@ -140,8 +160,26 @@ class AppViewModel @Inject constructor(
 
     private fun observeFsmState() {
         fsmEngine.state
-            .onEach { rideState -> _state.update { it.copy(rideState = rideState) } }
+            .onEach { rideState ->
+                _state.update { it.copy(rideState = rideState) }
+                if (rideState is RideState.WaitingAtStop) {
+                    if (rideState.remainingStops.isEmpty()) loadRemainingStops(rideState)
+                    if (rideState.arrivals.isEmpty()) updateArrivals()
+                }
+            }
             .launchIn(viewModelScope)
+    }
+
+    private fun loadRemainingStops(state: RideState.WaitingAtStop) {
+        val tid = state.tripId ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val stops = transitDb.getStopsForTrip(tid)
+                fsmEngine.process(RideEvent.RemainingStopsUpdated(stops))
+            } catch (e: Exception) {
+                Timber.e(e, "loadRemainingStops failed")
+            }
+        }
     }
 
     private fun observeLocation() {

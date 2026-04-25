@@ -54,11 +54,11 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
                     state.upcomingDepartures.asSequence().mapNotNull { departure ->
                         val route = Route(
                             routeId = departure.routeId,
-                            routeShortName = departure.routeShortName,
-                            routeLongName = departure.routeLongName,
+                            routeShortName = departure.routeShortName.trim(),
+                            routeLongName = departure.routeLongName.trim(),
                             routeType = 3,
-                            routeColor = departure.routeColor,
-                            routeTextColor = departure.routeTextColor,
+                            routeColor = departure.routeColor.trim(),
+                            routeTextColor = departure.routeTextColor.trim(),
                         )
                         val etaMinutes = try {
                             val depTime = LocalTime.parse(
@@ -81,6 +81,7 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
                             route = route,
                             headsign = departure.headsign.ifBlank { departure.routeLongName },
                             stopId = departure.stopId,
+                            tripId = departure.tripId,
                             nearestStopName = departure.stopName,
                             etaMinutes = etaMinutes,
                             isRealtime = false,
@@ -94,13 +95,14 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
 
                 BottomSheetScaffold(
                     scaffoldState = scaffoldState,
-                    sheetPeekHeight = 110.dp, // Reduced to ensure Search Bar is the primary focus when peeked
+                    sheetPeekHeight = 160.dp, // Increased to clearly show Search Bar + top of first card
                     sheetContainerColor = Color(0xFF1A0A2E),
                     sheetContentColor = Color.White,
+                    sheetSwipeEnabled = true,
                     sheetDragHandle = {
                         Surface(
                             modifier = Modifier
-                                .padding(top = 8.dp, bottom = 4.dp)
+                                .padding(top = 10.dp, bottom = 4.dp)
                                 .width(36.dp)
                                 .height(4.dp),
                             shape = RoundedCornerShape(2.dp),
@@ -119,6 +121,7 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
                                     onIntent(
                                         AppIntent.RouteSelected(
                                             route = arrival.route,
+                                            tripId = arrival.tripId ?: "",
                                             stop = stop,
                                             destination = null,
                                         )
@@ -155,7 +158,12 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
                             }
                         },
                         onRouteSelected = { route, stop, dest ->
-                            onIntent(AppIntent.RouteSelected(route, stop, dest))
+                            onIntent(AppIntent.RouteSelected(
+                                route = route,
+                                tripId = null,
+                                stop = stop,
+                                destination = dest
+                            ))
                             navController.navigate(Nav.RIDING)
                         },
                     )
@@ -178,6 +186,9 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
                             onIntent(AppIntent.Reset)
                             navController.popBackStack()
                         },
+                        onDestinationSelected = { stop ->
+                            onIntent(AppIntent.DestinationSelected(stop))
+                        }
                     )
                 }
             }
