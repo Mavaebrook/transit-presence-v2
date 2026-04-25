@@ -121,9 +121,14 @@ fun RouteArrivalCard(
                 val displayText = arrival.route.routeShortName.trim().ifBlank { 
                     arrival.route.routeId.trim().take(3) 
                 }
+                
+                // Better visibility logic: if background is light, use black text
+                val isLightBackground = (routeColor.red * 0.299 + routeColor.green * 0.587 + routeColor.blue * 0.114) > 0.6
+                val finalTextColor = if (isLightBackground) Color.Black else textColor
+                
                 Text(
                     text = displayText,
-                    color = if (routeColor == Color.White) Color.Black else textColor,
+                    color = finalTextColor,
                     fontSize = if (displayText.length > 3) 14.sp else 18.sp,
                     fontWeight = FontWeight.ExtraBold,
                 )

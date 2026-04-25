@@ -5,6 +5,9 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -101,15 +104,14 @@ fun WaitingScreen(
         if (state.remainingStops.isEmpty()) {
             LoadingRow("Loading route stops...")
         } else {
-            androidx.compose.foundation.lazy.LazyColumn(
+            LazyColumn(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
             ) {
-                items(state.remainingStops.size) { index ->
-                    val stop = state.remainingStops[index]
+                itemsIndexed(state.remainingStops) { index, stop ->
                     Surface(
                         onClick = { onDestinationSelected(stop) },
                         color = Color.Transparent,
@@ -122,7 +124,7 @@ fun WaitingScreen(
                             Box(
                                 modifier = Modifier
                                     .size(8.dp)
-                                    .background(MaterialTheme.colorScheme.primary, androidx.compose.foundation.shape.CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary, CircleShape)
                             )
                             Spacer(Modifier.width(16.dp))
                             Text(

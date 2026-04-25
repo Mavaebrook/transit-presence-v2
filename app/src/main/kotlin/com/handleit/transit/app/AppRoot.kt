@@ -45,6 +45,7 @@ fun AppRoot(state: AppState, onIntent: (AppIntent) -> Unit) {
                 val scaffoldState = rememberBottomSheetScaffoldState(
                     bottomSheetState = rememberStandardBottomSheetState(
                         initialValue = SheetValue.PartiallyExpanded,
+                        skipHiddenState = true,
                     ),
                 )
 

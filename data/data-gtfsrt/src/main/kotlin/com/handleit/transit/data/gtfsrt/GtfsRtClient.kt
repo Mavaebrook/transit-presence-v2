@@ -1,10 +1,7 @@
 package com.handleit.transit.data.gtfsrt
 
 import com.handleit.transit.common.TransitConfig
-import com.handleit.transit.model.BusArrival
-import com.handleit.transit.model.FeedStatus
-import com.handleit.transit.model.TripUpdate
-import com.handleit.transit.model.VehiclePosition
+import com.handleit.transit.model.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -14,10 +11,12 @@ import okhttp3.Request
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.*
 
 @Singleton
 class GtfsRtClient @Inject constructor(
     private val httpClient: OkHttpClient,
+    private val transitDb: com.handleit.transit.data.gtfs.TransitDb,
 ) {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var pollingJob: Job? = null
@@ -27,6 +26,8 @@ class GtfsRtClient @Inject constructor(
 
     private val _feedStatus = MutableStateFlow(FeedStatus.IDLE)
     val feedStatus: StateFlow<FeedStatus> = _feedStatus.asStateFlow()
+
+    private val stopCoordsCache = mutableMapOf<String, LatLng>()
 
     fun startPolling(intervalMs: Long = TransitConfig.GTFS_RT_POLL_INTERVAL_MS) {
         if (pollingJob?.isActive == true) return
@@ -53,19 +54,17 @@ class GtfsRtClient @Inject constructor(
     }
 
     fun arrivalsForStop(stopId: String, routeId: String): List<BusArrival> {
-        val vehicles = _vehicles.value
-        Timber.d("arrivalsForStop: checking $routeId at $stopId. Found ${vehicles.size} vehicles total.")
-        
-        return vehicles.asSequence()
+        val currentVehicles = _vehicles.value
+        val cleanStopId = stopId.trim()
+        val cleanRouteId = routeId.trim()
+
+        return currentVehicles.asSequence()
             .filter { 
-                val match = it.routeId == routeId || it.routeId == "LINK $routeId"
-                if (it.routeId.contains(routeId)) {
-                    Timber.v("arrivalsForStop: Partial match? vehicleRoute=${it.routeId} target=$routeId")
-                }
-                match
+                val vRoute = it.routeId.trim()
+                vRoute == cleanRouteId || vRoute == "LINK $cleanRouteId" || vRoute == cleanRouteId.removePrefix("LINK ")
             }
             .mapNotNull { v ->
-                val secsToArrival = estimateSecsToArrival(v, stopId) ?: return@mapNotNull null
+                val secsToArrival = runBlocking { estimateSecsToArrival(v, cleanStopId) } ?: return@mapNotNull null
                 BusArrival(
                     routeId = v.routeId,
                     routeShortName = v.routeId,
@@ -80,11 +79,34 @@ class GtfsRtClient @Inject constructor(
             .toList()
     }
 
-    private fun estimateSecsToArrival(vehicle: VehiclePosition, stopId: String): Long? {
-        // Placeholder — real implementation would cross-reference TripUpdates
-        // For now returns a synthetic estimate based on timestamp staleness
-        val ageSeconds = (System.currentTimeMillis() / 1000) - vehicle.timestamp
-        return if (ageSeconds < 300) (60 - ageSeconds).coerceAtLeast(0) else null
+    private suspend fun estimateSecsToArrival(vehicle: VehiclePosition, stopId: String): Long? {
+        val stopPos = stopCoordsCache[stopId] ?: transitDb.getStopById(stopId)?.let {
+            val pos = LatLng(it.lat, it.lng)
+            stopCoordsCache[stopId] = pos
+            pos
+        } ?: return null
+
+        val dist = haversine(vehicle.lat, vehicle.lng, stopPos.lat, stopPos.lng)
+        
+        // Very basic estimate: distance / average speed (10 m/s ~ 22 mph)
+        // Plus some overhead for stops
+        if (dist > 10000) return null // Too far
+        
+        val travelSecs = (dist / 10.0).toLong()
+        val ageSecs = (System.currentTimeMillis() / 1000) - vehicle.timestamp
+        
+        return (travelSecs - ageSecs).coerceAtLeast(0)
+    }
+
+    private fun haversine(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        val r = 6371000.0
+        val dLat = Math.toRadians(lat2 - lat1)
+        val dLon = Math.toRadians(lon2 - lon1)
+        val a = sin(dLat / 2) * sin(dLat / 2) +
+                cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
+                sin(dLon / 2) * sin(dLon / 2)
+        val c = 2 * atan2(sqrt(a), sqrt(1 - a))
+        return r * c
     }
 
     suspend fun fetchVehiclePositions(feedUrl: String): List<VehiclePosition> =

@@ -19,6 +19,7 @@ android {
 dependencies {
     implementation(project(":core:core-model"))
     implementation(project(":core:core-common"))
+    implementation(project(":data:data-gtfs"))
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
