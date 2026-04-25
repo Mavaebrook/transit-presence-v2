@@ -73,14 +73,23 @@ fun RouteArrivalCard(
 ) {
     val routeColor = try {
         Color(android.graphics.Color.parseColor("#${arrival.route.routeColor}"))
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         Color(0xFF1B5E20)
     }
 
     val textColor = try {
         Color(android.graphics.Color.parseColor("#${arrival.route.routeTextColor}"))
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         Color.White
+    }
+
+    // Direction-based styling
+    // 0 = Outbound, 1 = Inbound (usually toward terminal)
+    val isInbound = arrival.directionId == 1
+    val backgroundColor = if (isInbound) {
+        Color(0xFF2C1C4D) // Darker purple for Inbound
+    } else {
+        routeColor.copy(alpha = 0.15f) // Thematic tint for Outbound
     }
 
     Surface(
@@ -88,8 +97,8 @@ fun RouteArrivalCard(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(0.dp),
-        color = routeColor.copy(alpha = 0.15f),
+        shape = RoundedCornerShape(8.dp), // Slightly rounded for modern look
+        color = backgroundColor,
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
@@ -100,7 +109,7 @@ fun RouteArrivalCard(
                 modifier = Modifier
                     .size(52.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(routeColor)
+                    .background(routeColor),
             ) {
                 Text(
                     text = arrival.route.routeShortName,
@@ -113,13 +122,24 @@ fun RouteArrivalCard(
             Spacer(Modifier.width(14.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = arrival.headsign,
-                    color = Color.White,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = arrival.headsign,
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                    )
+                    if (isInbound) {
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "(Lynx Central)",
+                            color = Color(0xFF69F0AE), // Soft green for indicator
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = arrival.nearestStopName,

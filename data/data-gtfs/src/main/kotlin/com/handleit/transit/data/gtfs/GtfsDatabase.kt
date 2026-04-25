@@ -111,7 +111,7 @@ class TransitDb @Inject constructor(
     suspend fun getStopById(id: String): Stop? = withContext(Dispatchers.IO) {
         try {
             getDb().rawQuery(
-                "SELECT stopId, stopName, lat, lng, wheelchairBoarding FROM stops WHERE stopId = ? LIMIT 1",
+                "SELECT stopId, stopName, lat, lng FROM stops WHERE stopId = ? LIMIT 1",
                 arrayOf(id)
             ).use { cursor ->
                 if (cursor.moveToFirst()) cursor.toStop() else null
@@ -126,7 +126,7 @@ class TransitDb @Inject constructor(
         withContext(Dispatchers.IO) {
             try {
                 getDb().rawQuery(
-                    "SELECT stopId, stopName, lat, lng, wheelchairBoarding FROM stops ORDER BY ((lat - ?) * (lat - ?) + (lng - ?) * (lng - ?)) LIMIT ?",
+                    "SELECT stopId, stopName, lat, lng FROM stops ORDER BY ((lat - ?) * (lat - ?) + (lng - ?) * (lng - ?)) LIMIT ?",
                     arrayOf(lat.toString(), lat.toString(), lng.toString(), lng.toString(), limit.toString())
                 ).use { cursor ->
                     val results = mutableListOf<Stop>()
@@ -148,7 +148,7 @@ class TransitDb @Inject constructor(
         try {
             getDb().rawQuery(
                 """
-                SELECT stopId, stopName, lat, lng, wheelchairBoarding
+                SELECT stopId, stopName, lat, lng
                 FROM stops
                 WHERE lat BETWEEN ? AND ?
                 AND lng BETWEEN ? AND ?
@@ -540,7 +540,7 @@ class TransitDb @Inject constructor(
         stopName = getString(1),
         lat = getDouble(2),
         lng = getDouble(3),
-        wheelchairBoarding = getInt(4)
+        wheelchairBoarding = 0, // Simplified: Column removed in advanced parser
     )
 
     private fun android.database.Cursor.toRoute() = Route(
